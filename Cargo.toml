@@ -1,0 +1,32 @@
+[package]
+name = "hdos_api"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+actix-rt = "2.8.0"
+actix-web = "4.3.0"
+actix-web-validator = "5.0.1"
+bigdecimal = {version="0.4.5", features= ["serde"]}
+chrono = "0.4.23"
+dotenv = "0.15.0"
+futures = "0.3.25"
+futures-util = "0.3.26"
+handlebars = "4.3.6"
+jsonwebtoken = "8.2.0"
+lettre = "0.10.1"
+mongodb = "3.0.1"
+r2d2 = "0.8.10"
+r2d2-mongodb = "*"
+rand = "0.8.5"
+regex = "1.7.1"
+rng = "0.1.0"
+serde = "1.0.152"
+serde_derive = "1.0.152"
+serde_json = "1.0.91"
+strum = "0.26.3"
+strum_macros = "0.26"
+uuid = "1.10.0"
+validator = {version ="0.16.0", features = ["derive"] }
