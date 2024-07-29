@@ -54,4 +54,29 @@ impl BuyOrderService {
     }
 
     
+    pub async  fn update(db:&Database, buy_order:&BuyOrder)->Result<(), Box<dyn Error>>{
+        let filter = doc! {"id":buy_order.id.clone()};
+        let collection = db.collection::<BuyOrder>(BUY_ORDER_COLLECTION);
+        let update_data = doc! {"$set":doc! {
+            "amount":buy_order.amount.to_owned().to_string(),
+            "is_seller_confirmed":buy_order.is_seller_confirmed.to_string(),
+            "is_buyer_confirmed": buy_order.is_buyer_confirmed.to_string(),
+            "is_canceled": buy_order.is_canceled.to_string(),
+            "is_reported": buy_order.is_reported,
+            "updated_at": chrono::offset::Utc::now().to_string(),
+           
+            }};
+
+        let update_res = collection.update_one(filter, update_data).await;
+        match update_res {
+            Ok(_)=>{},
+            Err(err)=>{
+
+                return Err(err.into());
+            }
+        }
+        Ok(())
+    }
+
+    
 }

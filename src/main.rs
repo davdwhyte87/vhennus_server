@@ -69,6 +69,8 @@ async fn main() -> std::io::Result<()> {
                         .service(sell_order_controller::create_sell_order)
                         .service(sell_order_controller::get_my_sell_orders)
                         .service(sell_order_controller::get_single_sell_order)
+                        .service(sell_order_controller::cancel_sell_order)
+                        .service(sell_order_controller::update_sell_order)
                     )
                     .service(
                         web::scope("buy_order")

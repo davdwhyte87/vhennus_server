@@ -6,7 +6,7 @@ use bigdecimal::BigDecimal;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{models::{response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::CreateSellOrderReq, services::{mongo_service::MongoService, sell_order_service::SellOrderService}, utils::auth::Claims};
+use crate::{models::{response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, sell_order_service::SellOrderService}, utils::auth::Claims};
 
 
 
@@ -40,9 +40,12 @@ pub async fn create_sell_order(
         amount : new_order.amount.to_owned(),
         min_amount: new_order.min_amount.to_owned(),
         max_amount: new_order.max_amount.to_owned(),
-        is_cancelled: false,
+        is_closed: false,
         created_at: chrono::offset::Utc::now().to_string(),
-        currency: new_order.currency.to_owned()
+        currency: new_order.currency.to_owned(),
+        updated_at: Some(chrono::offset::Utc::now().to_string()),
+        payment_method: new_order.payment_method.to_owned(),
+        payment_method_id: new_order.payment_method_id.to_owned()
     };
 
     // save order
@@ -145,7 +148,7 @@ pub async fn get_single_sell_order(
 
 
 
-#[get("/{id}")]
+#[get("/cancel/{id}")]
 pub async fn cancel_sell_order(
 
     database:Data<MongoService>,
@@ -164,7 +167,7 @@ pub async fn cancel_sell_order(
 
     // get sell order 
     
-    let order = match SellOrderService::get_sell_order_by_id(&database.db, inf.id.to_owned()).await{
+    let mut order = match SellOrderService::get_sell_order_by_id(&database.db, inf.id.to_owned()).await{
         Ok(data)=>{data},
         Err(err)=>{
             return HttpResponse::BadRequest().json(GenericResp::<String>{
@@ -175,7 +178,7 @@ pub async fn cancel_sell_order(
     };
 
     // check of any of the buy orders is still active 
-    match order.buy_orders {
+    match order.buy_orders.clone() {
         Some(data)=>{
             for buy_order in data {
                 if !(buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed) {
@@ -192,11 +195,91 @@ pub async fn cancel_sell_order(
 
     }
 
-    SellOrderService
+    order.is_closed = true;
+
+    match SellOrderService::update(&database.db, &order).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            return HttpResponse::InternalServerError().json(GenericResp::<String>{
+                message:"TError updating sell order".to_string(),
+                data: err.to_string()
+            })   
+        }
+    }
 
 
     return HttpResponse::Ok().json(GenericResp::<SellOrder>{
         message:"Ok".to_string(),
         data: order
     })
+}
+
+
+#[post("/update/{id}")]
+pub async fn update_sell_order(
+
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>,
+    new_order:Json<UpdateSellOrderReq>,
+    inf: web::Path<GetSingleSellOrderPath>
+)->HttpResponse
+{
+
+    // get claims
+    // get claims 
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            return HttpResponse::Unauthorized()
+                .json(Response{message:"Not authorized".to_string()})
+        }
+    }; 
+
+    // get sell order 
+    let mut sell_order = match SellOrderService::get_sell_order_by_id(&database.db, inf.id.to_owned()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            return HttpResponse::BadRequest().json(GenericResp::<String>{
+                message:"Error getting data".to_string(),
+                data: err.to_string()
+            })   
+        }
+    };
+
+    // check if user owns the order 
+    if sell_order.user_name != claim.user_name{
+        return HttpResponse::Unauthorized().json(GenericResp::<String>{
+            message:"Unauthorized".to_string(),
+            data: "".to_string()
+        })      
+    }
+
+    // update data 
+    if new_order.currency.is_some(){
+        sell_order.currency = new_order.currency.to_owned().unwrap()
+
+    }
+    if new_order.max_amount.is_some(){
+        sell_order.max_amount = new_order.max_amount.to_owned().unwrap()
+    }
+    if new_order.min_amount.is_some(){
+        sell_order.min_amount = new_order.min_amount.to_owned().unwrap()
+    }
+
+
+    // update on database 
+    match SellOrderService::update(&database.db, &sell_order).await {
+        Ok(_)=>{},
+        Err(err)=>{
+            return HttpResponse::BadRequest().json(GenericResp::<String>{
+                message:"Error updating data".to_string(),
+                data: err.to_string()
+            })   
+        }
+    }
+
+     return HttpResponse::Ok().json(GenericResp::<String>{
+        message:"Ok".to_string(),
+        data: "Ok".to_string()
+    }) 
 }

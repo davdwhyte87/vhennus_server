@@ -16,5 +16,6 @@ pub struct BuyOrder {
     pub is_buyer_confirmed:bool,
     pub is_canceled:bool,
     pub is_reported:bool,
-    pub created_at:String
+    pub created_at:String, 
+    pub updated_at: String
 }

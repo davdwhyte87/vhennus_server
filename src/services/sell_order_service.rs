@@ -3,7 +3,7 @@ use std::error::Error;
 use futures::StreamExt;
 use mongodb::{bson::{doc, from_document}, results::InsertOneResult, Database};
 
-use crate::models::sell_order::SellOrder;
+use crate::models::{payment_method::PaymentMethod, sell_order::SellOrder};
 use strum_macros::{EnumString, ToString};
 
 
@@ -89,18 +89,29 @@ impl SellOrderService {
     }
 
 
-    pub async  fn update(db:&Database, sell_order:SellOrder)->Result<(), Box<dyn Error>>{
+    pub async  fn update(db:&Database, sell_order:&SellOrder)->Result<(), Box<dyn Error>>{
         let filter = doc! {"id":sell_order.id.clone()};
-        sell_order.currency
+        let collection = db.collection::<SellOrder>(SELL_ORDER_COLLECTION);
         let update_data = doc! {"$set":doc! {
-            "buy_orders_id":sell_order.buy_orders_id,
+            "buy_orders_id":sell_order.buy_orders_id.to_owned(),
             "amount":sell_order.amount.to_string(),
             "min_amount": sell_order.min_amount.to_string(),
             "max_amount": sell_order.max_amount.to_string(),
-            "is_cancelled": sell_order.is_cancelled,
-            "currency": sell_order.currency.,
-            "updated_at": sell_order.updated_at
+            "is_closed": sell_order.is_closed,
+            "currency": sell_order.currency.to_string(),
+            "updated_at": sell_order.updated_at.to_owned(),
+            "payment_method": sell_order.payment_method.to_owned().to_string(),
+            "payment_method_id": sell_order.payment_method_id.to_owned()
             }};
+
+        let update_res = collection.update_one(filter, update_data).await;
+        match update_res {
+            Ok(_)=>{},
+            Err(err)=>{
+
+                return Err(err.into());
+            }
+        }
         Ok(())
     }
 }

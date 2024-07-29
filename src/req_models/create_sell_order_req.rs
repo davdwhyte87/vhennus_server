@@ -2,7 +2,7 @@ use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::models::sell_order::Currency;
+use crate::models::{payment_method::PaymentMethod, sell_order::Currency};
 
 
 
@@ -11,7 +11,21 @@ pub struct CreateSellOrderReq{
     pub amount:BigDecimal,
     pub min_amount:BigDecimal,
     pub max_amount:BigDecimal, 
-    pub currency:Currency
+    pub currency:Currency,
+    pub payment_method: PaymentMethod,
+    pub payment_method_id: String
+}
+
+
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct UpdateSellOrderReq{
+    pub amount: Option<BigDecimal>,
+    pub min_amount:Option<BigDecimal>,
+    pub max_amount:Option<BigDecimal>, 
+    pub currency:Option<Currency>,
+    pub payment_method: Option<PaymentMethod>,
+    pub payment_method_id: Option<String>
 }
 
 

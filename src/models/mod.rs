@@ -12,3 +12,4 @@ pub mod run_info;
 pub mod account_details;
 pub mod sell_order;
 pub mod buy_order;
+pub  mod  payment_method;

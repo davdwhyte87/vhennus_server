@@ -76,7 +76,8 @@ pub async fn create_buy_order(
         is_seller_confirmed:false,
         is_canceled:false,
         is_reported:false,
-        created_at: chrono::offset::Utc::now().to_string()
+        created_at: chrono::offset::Utc::now().to_string(),
+        updated_at: chrono::offset::Utc::now().to_string(),
     };
 
     let seller_order_id = new_order.sell_order_id.to_owned();
@@ -306,3 +307,159 @@ pub async fn get_single_buy_order(
         })
 
 }
+
+#[get("/{id}/buyer_confirmed")]
+pub async fn buyer_confirmed(
+
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>,
+    info: web::Path<GetBuyOrderPath>
+)->HttpResponse
+{
+
+
+          // get claim 
+        let claim = match claim {
+            Some(claim)=>{claim},
+            None=>{
+                return HttpResponse::Unauthorized()
+                    .json(Response{message:"Not authorized".to_string()})
+            }
+        };
+
+    // get buy order 
+
+    let mut buy_order = match BuyOrderService::get_single_order_by_id(&database.db, info.id.to_owned()).await{
+        Ok(data)=>{
+            match data {
+                Some(data)=>{data},
+                None=>{
+                    return HttpResponse::NotFound().json(GenericResp::<String>{
+                        message:"Could not find order".to_string(),
+                        data: "".to_string()
+                    })    
+                }
+            }
+        },
+        Err(err)=>{
+            return HttpResponse::BadRequest().json(GenericResp::<String>{
+                message:"Error getting data".to_string(),
+                data: "".to_string()
+            }) 
+        }
+    };
+
+    // make sure user owns order
+    if buy_order.user_name != claim.user_name{
+        return HttpResponse::Unauthorized().json(GenericResp::<String>{
+            message:"Unauthorized".to_string(),
+            data: "".to_string()
+        })  
+    }
+    // modify order 
+    buy_order.is_buyer_confirmed = true;
+
+    // update database
+    match BuyOrderService::update(&database.db, &buy_order).await {
+        Ok(_)=>{},
+        Err(err)=>{
+            return HttpResponse::BadRequest().json(GenericResp::<String>{
+                message:"Error saving data".to_string(),
+                data: err.to_string()
+            }) 
+        }
+    }
+
+
+
+
+    return HttpResponse::Ok().json(GenericResp::<String>{
+        message:"Successfully updated".to_string(),
+        data: "".to_string()
+    })
+}
+
+
+
+#[get("/{id}/seller_confirmed")]
+pub async fn seller_confirmed(
+
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>,
+    info: web::Path<GetBuyOrderPath>
+)->HttpResponse
+{
+
+
+          // get claim 
+        let claim = match claim {
+            Some(claim)=>{claim},
+            None=>{
+                return HttpResponse::Unauthorized()
+                    .json(Response{message:"Not authorized".to_string()})
+            }
+        };
+
+    // get buy order 
+
+    let mut buy_order = match BuyOrderService::get_single_order_by_id(&database.db, info.id.to_owned()).await{
+        Ok(data)=>{
+            match data {
+                Some(data)=>{data},
+                None=>{
+                    return HttpResponse::NotFound().json(GenericResp::<String>{
+                        message:"Could not find order".to_string(),
+                        data: "".to_string()
+                    })    
+                }
+            }
+        },
+        Err(err)=>{
+            return HttpResponse::BadRequest().json(GenericResp::<String>{
+                message:"Error getting data".to_string(),
+                data: "".to_string()
+            }) 
+        }
+    };
+
+    // get sell order 
+    let sell_order =match  SellOrderService::get_sell_order_by_id(&database.db, buy_order.sell_order_id.to_owned()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            return HttpResponse::BadRequest().json(GenericResp::<String>{
+                message:"Error getting data".to_string(),
+                data: err.to_string()
+            })   
+        }
+    };
+
+    // make sure user owns sell order
+    if sell_order.user_name != claim.user_name{
+        return HttpResponse::Unauthorized().json(GenericResp::<String>{
+            message:"Unauthorized".to_string(),
+            data: "".to_string()
+        })  
+    }
+    // modify order 
+    buy_order.is_seller_confirmed = true;
+
+    // update database
+    match BuyOrderService::update(&database.db, &buy_order).await {
+        Ok(_)=>{},
+        Err(err)=>{
+            return HttpResponse::BadRequest().json(GenericResp::<String>{
+                message:"Error saving data".to_string(),
+                data: err.to_string()
+            }) 
+        }
+    }
+
+
+
+
+    return HttpResponse::Ok().json(GenericResp::<String>{
+        message:"Successfully updated".to_string(),
+        data: "".to_string()
+    })
+}
+

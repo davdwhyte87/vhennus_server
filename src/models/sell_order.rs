@@ -1,8 +1,10 @@
 use bigdecimal::BigDecimal;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
+use std::string::ToString;
+use strum_macros;
 
-use super::{buy_order::BuyOrder, user::UserType};
+use super::{buy_order::BuyOrder, payment_method::PaymentMethod, user::UserType};
 
 
 
@@ -15,15 +17,17 @@ pub struct SellOrder {
     pub amount:BigDecimal,
     pub min_amount:BigDecimal,
     pub max_amount:BigDecimal,
-    pub is_cancelled:bool,
+    pub is_closed:bool,
     pub currency:Currency,
     pub created_at:String,
-    pub updated_at: Option<String>
+    pub updated_at: Option<String>,
+    pub payment_method: PaymentMethod,
+    pub payment_method_id: String
 }
 
 
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq )]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq,strum_macros::Display )]
 pub enum Currency{
     NGN,
     USD,
