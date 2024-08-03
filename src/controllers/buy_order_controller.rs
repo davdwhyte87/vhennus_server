@@ -294,12 +294,12 @@ pub async fn get_single_buy_order(
         };
 
         // check if logged in user owns the data
-        if (order.user_name != claim.user_name){
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Unauthorized".to_string(),
-                data: "Unauthorized".to_string()
-            })  
-        }
+        // if (order.user_name != claim.user_name){
+        //     return HttpResponse::BadRequest().json(GenericResp::<String>{
+        //         message:"Unauthorized".to_string(),
+        //         data: "Unauthorized".to_string()
+        //     })  
+        // }
 
         return HttpResponse::Ok().json(GenericResp::<BuyOrder>{
             message:"Successfully created".to_string(),
@@ -417,7 +417,7 @@ pub async fn seller_confirmed(
         Err(err)=>{
             return HttpResponse::BadRequest().json(GenericResp::<String>{
                 message:"Error getting data".to_string(),
-                data: "".to_string()
+                data: err.to_string()
             }) 
         }
     };

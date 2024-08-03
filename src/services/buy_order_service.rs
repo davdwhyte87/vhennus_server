@@ -59,9 +59,9 @@ impl BuyOrderService {
         let collection = db.collection::<BuyOrder>(BUY_ORDER_COLLECTION);
         let update_data = doc! {"$set":doc! {
             "amount":buy_order.amount.to_owned().to_string(),
-            "is_seller_confirmed":buy_order.is_seller_confirmed.to_string(),
-            "is_buyer_confirmed": buy_order.is_buyer_confirmed.to_string(),
-            "is_canceled": buy_order.is_canceled.to_string(),
+            "is_seller_confirmed":buy_order.is_seller_confirmed,
+            "is_buyer_confirmed": buy_order.is_buyer_confirmed,
+            "is_canceled": buy_order.is_canceled,
             "is_reported": buy_order.is_reported,
             "updated_at": chrono::offset::Utc::now().to_string(),
            

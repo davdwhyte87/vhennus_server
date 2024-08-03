@@ -6,7 +6,7 @@ use bigdecimal::BigDecimal;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{models::{response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, sell_order_service::SellOrderService}, utils::auth::Claims};
+use crate::{models::{payment_method::PaymentMethod, response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, sell_order_service::SellOrderService}, utils::auth::Claims};
 
 
 

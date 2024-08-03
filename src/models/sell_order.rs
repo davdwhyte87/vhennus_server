@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::string::ToString;
 use strum_macros;
 
-use super::{buy_order::BuyOrder, payment_method::PaymentMethod, user::UserType};
+use super::{buy_order::BuyOrder, payment_method::{PaymentMethod, PaymentMethodData}, user::UserType};
 
 
 
@@ -22,7 +22,8 @@ pub struct SellOrder {
     pub created_at:String,
     pub updated_at: Option<String>,
     pub payment_method: PaymentMethod,
-    pub payment_method_id: String
+    pub payment_method_id: String,
+  
 }
 
 
