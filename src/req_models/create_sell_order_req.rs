@@ -10,7 +10,7 @@ use crate::models::{payment_method::PaymentMethod, sell_order::Currency};
 pub struct CreateSellOrderReq{
     pub amount:BigDecimal,
     pub min_amount:BigDecimal,
-    pub max_amount:BigDecimal, 
+    //pub max_amount:BigDecimal, 
     pub currency:Currency,
     pub payment_method: PaymentMethod,
     pub payment_method_id: String

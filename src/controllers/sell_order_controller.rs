@@ -39,13 +39,14 @@ pub async fn create_sell_order(
         buy_orders : None, 
         amount : new_order.amount.to_owned(),
         min_amount: new_order.min_amount.to_owned(),
-        max_amount: new_order.max_amount.to_owned(),
+        max_amount: new_order.amount.to_owned(),
         is_closed: false,
         created_at: chrono::offset::Utc::now().to_string(),
         currency: new_order.currency.to_owned(),
         updated_at: Some(chrono::offset::Utc::now().to_string()),
         payment_method: new_order.payment_method.to_owned(),
-        payment_method_id: new_order.payment_method_id.to_owned()
+        payment_method_id: new_order.payment_method_id.to_owned(),
+        payment_method_data: None
     };
 
     // save order
@@ -134,7 +135,7 @@ pub async fn get_single_sell_order(
         Err(err)=>{
             return HttpResponse::Ok().json(GenericResp::<String>{
                 message:"Error getting sell order".to_string(),
-                data: "".to_string()
+                data: err.to_string()
             }) 
         }
     };

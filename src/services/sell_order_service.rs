@@ -64,10 +64,23 @@ impl SellOrderService {
                   "foreignField": "id",
                   "as": "buy_orders"
                }
-            };
+        };
+        let lookup_3 = doc! {
+            "$lookup":
+               {
+                  "from": "PaymentMethodData",
+                  "localField": "payment_method_id",
+                  "foreignField": "id",
+                  "as": "payment_method_data"
+               }
+        };
         let pipeline = vec![
             doc! { "$match": filter },
             lookup_2,
+            lookup_3,
+            doc! {
+                 "$unwind": "$payment_method_data"
+            }
         ];
 
         let mut sell_orders:Vec<SellOrder> = Vec::new();

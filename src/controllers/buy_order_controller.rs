@@ -463,3 +463,71 @@ pub async fn seller_confirmed(
     })
 }
 
+
+
+#[get("/{id}/cancel")]
+pub async fn cancel_buy_order(
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>,
+    info: web::Path<GetBuyOrderPath>
+)->HttpResponse{
+
+    // get claim 
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            return HttpResponse::Unauthorized()
+                .json(Response{message:"Not authorized".to_string()})
+        }
+    };
+
+    // get buy order 
+
+    let mut buy_order = match BuyOrderService::get_single_order_by_id(&database.db, info.id.to_owned()).await{
+        Ok(data)=>{
+            match data {
+                Some(data)=>{data},
+                None=>{
+                    return HttpResponse::NotFound().json(GenericResp::<String>{
+                        message:"Could not find order".to_string(),
+                        data: "".to_string()
+                    })    
+                }
+            }
+        },
+        Err(err)=>{
+            return HttpResponse::BadRequest().json(GenericResp::<String>{
+                message:"Error getting data".to_string(),
+                data: err.to_string()
+            }) 
+        }
+    };
+
+    // make sure request user is the order owner
+    if buy_order.user_name != claim.user_name{
+        return HttpResponse::Unauthorized().json(GenericResp::<String>{
+            message:"Unauthorized ".to_string(),
+            data: "".to_string()
+        }) 
+    }
+
+    // update order
+    buy_order.is_canceled = true;
+
+    // update dataase
+    match BuyOrderService::update(&database.db, &buy_order).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            return HttpResponse::BadRequest().json(GenericResp::<String>{
+                message:"Error updating order ".to_string(),
+                data: err.to_string()
+            })   
+        }
+    }
+
+
+    return HttpResponse::Ok().json(GenericResp::<String>{
+        message:"Successfull ".to_string(),
+        data: "".to_string()
+    })
+}

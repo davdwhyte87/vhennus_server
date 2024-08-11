@@ -11,7 +11,7 @@ use crate::models::{buy_order::BuyOrder, payment_method::{ PaymentMethodData}, s
 
 
 
-pub const PAYMENT_METHOD_COLLECTION:&str = "PaymentMethod";
+pub const PAYMENT_METHOD_COLLECTION:&str = "PaymentMethodData";
 
 pub struct  PaymentMethodService{
 

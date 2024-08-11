@@ -79,6 +79,7 @@ async fn main() -> std::io::Result<()> {
                         .service(buy_order_controller::get_single_buy_order)
                         .service(buy_order_controller::buyer_confirmed)
                         .service(buy_order_controller::seller_confirmed)
+                        .service(buy_order_controller::cancel_buy_order)
                     )
                     .service(
                         web::scope("payment_method")
@@ -93,7 +94,7 @@ async fn main() -> std::io::Result<()> {
             .service(user_controller::login_user)
             .service(power_ups_controller::use_power_up)
             .service(user_controller::get_code)
-          
+            .service(hello)
 
             //
 
