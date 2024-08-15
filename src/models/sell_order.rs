@@ -1,14 +1,14 @@
 use bigdecimal::BigDecimal;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
-use std::string::ToString;
+use std::{default, string::ToString};
 use strum_macros;
 
 use super::{buy_order::BuyOrder, payment_method::{PaymentMethod, PaymentMethodData}, user::UserType};
 
 
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct SellOrder {
     pub id: String,
     pub user_name: String,
@@ -28,8 +28,9 @@ pub struct SellOrder {
 
 
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq,strum_macros::Display )]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq,strum_macros::Display, Default )]
 pub enum Currency{
+    #[default]
     NGN,
     USD,
     BTC,

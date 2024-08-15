@@ -18,14 +18,22 @@ pub async fn create_sell_order(
     new_order:Json<CreateSellOrderReq>,
     claim:Option<ReqData<Claims>>
     )->HttpResponse{
-
+        let mut respData = GenericResp::<SellOrder>{
+            message:"".to_string(),
+            server_message: Some("".to_string()),
+            data: Some(SellOrder::default())
+        };
     println!("new req");
 
     let claim = match claim {
         Some(claim)=>{claim},
         None=>{
+            respData.message = "Unauthorized".to_string();
+
             return HttpResponse::Unauthorized()
-                .json(Response{message:"Not authorized".to_string()})
+                .json(
+                    respData
+                )
         }
     };
 
@@ -53,17 +61,24 @@ pub async fn create_sell_order(
     match SellOrderService::create_sell_order(&database.db, &sell_order).await{
 
         Ok(_)=>{},
-        Err(err)=>{
+        Err(err)=>{ 
+            respData.message = "Error creating ".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data =None;
             return HttpResponse::InternalServerError().json(
-                GenericResp{
-                    message:"Successfully created".to_string(),
-                    data: err.to_string()
-                }
+              respData
+               
             )  
         }
     };
 
-    return HttpResponse::Ok().json(Response{message:"Successfully created".to_string()})
+
+    respData.data = None;
+    respData.message = "Created".to_string();
+    respData.server_message = None;
+    return HttpResponse::Ok().json(
+        respData
+    )
 
 }
 
@@ -77,11 +92,22 @@ pub async fn get_my_sell_orders(
     claim:Option<ReqData<Claims>>
     )->HttpResponse
     {
+        let mut respData = GenericResp::<Vec<SellOrder>>{
+            message:"".to_string(),
+            server_message: Some("".to_string()),
+            data: None
+        };
+
         let claim = match claim {
             Some(claim)=>{claim},
             None=>{
+                respData.data = None;
+                respData.message = "Unauthorized".to_string();
+                respData.server_message = None;
                 return HttpResponse::Unauthorized()
-                    .json(Response{message:"Not authorized".to_string()})
+                    .json(
+                        respData
+                    )
             }
         };
 
@@ -89,19 +115,24 @@ pub async fn get_my_sell_orders(
         let orders = match SellOrderService::get_all_sell_order_by_username(&database.db, claim.user_name.clone()).await{
             Ok(data)=>{data},
             Err(err)=>{
+                respData.data = None;
+                respData.server_message = Some(err.to_string());
+                respData.message = "Error getting sell order".to_string();
+
                 return HttpResponse::InternalServerError().json(
-                    GenericResp::<String>{
-                        message:"Successfully created".to_string(),
-                        data: err.to_string()
-                    }
+                  respData
                 )  
             }
         };
+        
 
-        return HttpResponse::Ok().json(GenericResp::<Vec<SellOrder>>{
-            message:"Successfully created".to_string(),
-            data: orders
-        })
+        respData.data = Some(orders);
+        respData.message = "ok".to_string();
+        respData.server_message = None;
+
+        return HttpResponse::Ok().json(
+            respData
+        )
 
 }
 
@@ -120,6 +151,11 @@ pub async fn get_single_sell_order(
     inf: web::Path<GetSingleSellOrderPath>
 )->HttpResponse
 {
+    let mut respData = GenericResp::<SellOrder>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
     // get claims 
     let claim = match claim {
         Some(claim)=>{claim},
@@ -133,17 +169,15 @@ pub async fn get_single_sell_order(
     let order = match SellOrderService::get_sell_order_by_id(&database.db, inf.id.to_owned()).await{
         Ok(data)=>{data},
         Err(err)=>{
-            return HttpResponse::Ok().json(GenericResp::<String>{
-                message:"Error getting sell order".to_string(),
-                data: err.to_string()
-            }) 
+            respData.message = "Error getting sell order".to_string();
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::Ok().json(respData) 
         }
     };
 
-    return HttpResponse::Ok().json(GenericResp::<SellOrder>{
-        message:"Ok".to_string(),
-        data: order
-    })
+    respData.data = Some(order);
+
+    return HttpResponse::Ok().json(respData)
 
 }
 
@@ -157,6 +191,11 @@ pub async fn cancel_sell_order(
     inf: web::Path<GetSingleSellOrderPath>
 )->HttpResponse
 {
+    let mut respData = GenericResp::<SellOrder>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
    // get claims 
     let claim = match claim {
         Some(claim)=>{claim},
@@ -167,14 +206,17 @@ pub async fn cancel_sell_order(
     }; 
 
     // get sell order 
-    
+    println!("{}", inf.id);
     let mut order = match SellOrderService::get_sell_order_by_id(&database.db, inf.id.to_owned()).await{
         Ok(data)=>{data},
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error getting sell order".to_string(),
-                data: "".to_string()
-            }) 
+            respData.message = "Error getting sell order".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+
+            return HttpResponse::BadRequest().json(
+                respData
+            ) 
         }
     };
 
@@ -183,10 +225,11 @@ pub async fn cancel_sell_order(
         Some(data)=>{
             for buy_order in data {
                 if !(buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed) {
-                    return HttpResponse::BadRequest().json(GenericResp::<String>{
-                        message:"There is still an open buy order".to_string(),
-                        data: "".to_string()
-                    }) 
+                    respData.message = "There is still an open buy order".to_string();
+                    respData.data = None;
+                    respData.server_message = None;
+
+                    return HttpResponse::BadRequest().json(respData) 
                 }
             }
         },
@@ -201,18 +244,19 @@ pub async fn cancel_sell_order(
     match SellOrderService::update(&database.db, &order).await{
         Ok(_)=>{},
         Err(err)=>{
-            return HttpResponse::InternalServerError().json(GenericResp::<String>{
-                message:"TError updating sell order".to_string(),
-                data: err.to_string()
-            })   
+            respData.message = "error updating sell order".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+
+            return HttpResponse::InternalServerError().json(respData)  ;
         }
     }
 
+    respData.data = Some(order);
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
 
-    return HttpResponse::Ok().json(GenericResp::<SellOrder>{
-        message:"Ok".to_string(),
-        data: order
-    })
+    return HttpResponse::Ok().json(respData)
 }
 
 
@@ -225,14 +269,22 @@ pub async fn update_sell_order(
     inf: web::Path<GetSingleSellOrderPath>
 )->HttpResponse
 {
+    let mut respData = GenericResp::<SellOrder>{
+        message:"".to_string(),
+        server_message: None,
+        data: None
+    };
 
     // get claims
     // get claims 
     let claim = match claim {
         Some(claim)=>{claim},
         None=>{
+            respData.message = "Unauthorized".to_string();
             return HttpResponse::Unauthorized()
-                .json(Response{message:"Not authorized".to_string()})
+                .json(
+                    respData
+                )
         }
     }; 
 
@@ -240,25 +292,24 @@ pub async fn update_sell_order(
     let mut sell_order = match SellOrderService::get_sell_order_by_id(&database.db, inf.id.to_owned()).await{
         Ok(data)=>{data},
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error getting data".to_string(),
-                data: err.to_string()
-            })   
+            respData.message = "error getting data".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData)   
         }
     };
 
     // check if user owns the order 
     if sell_order.user_name != claim.user_name{
-        return HttpResponse::Unauthorized().json(GenericResp::<String>{
-            message:"Unauthorized".to_string(),
-            data: "".to_string()
-        })      
+        respData.message = "Unauthorized".to_string();
+        respData.data = None;
+        respData.server_message = None;
+        return HttpResponse::Unauthorized().json(respData)      
     }
 
     // update data 
     if new_order.currency.is_some(){
         sell_order.currency = new_order.currency.to_owned().unwrap()
-
     }
     if new_order.max_amount.is_some(){
         sell_order.max_amount = new_order.max_amount.to_owned().unwrap()
@@ -267,20 +318,75 @@ pub async fn update_sell_order(
         sell_order.min_amount = new_order.min_amount.to_owned().unwrap()
     }
 
-
     // update on database 
     match SellOrderService::update(&database.db, &sell_order).await {
         Ok(_)=>{},
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error updating data".to_string(),
-                data: err.to_string()
-            })   
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            respData.message = "Error updating data".to_string();
+
+            return HttpResponse::BadRequest().json(respData)   
         }
     }
 
-     return HttpResponse::Ok().json(GenericResp::<String>{
-        message:"Ok".to_string(),
-        data: "Ok".to_string()
-    }) 
+    respData.message = "Ok".to_string();
+    respData.data = None;
+    respData.server_message = None;
+
+    return HttpResponse::Ok().json(respData) 
+}
+
+
+
+
+#[get("/open_orders")]
+pub async fn get_all_open_sell_orders(
+
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>
+    )->HttpResponse
+    {
+        let mut respData = GenericResp::<Vec<SellOrder>>{
+            message:"".to_string(),
+            server_message: Some("".to_string()),
+            data: None
+        };
+
+        let claim = match claim {
+            Some(claim)=>{claim},
+            None=>{
+                respData.data = None;
+                respData.message = "Unauthorized".to_string();
+                respData.server_message = None;
+                return HttpResponse::Unauthorized()
+                    .json(
+                        respData
+                    )
+            }
+        };
+
+
+        let orders = match SellOrderService::get_all_sell_order_by_username(&database.db, claim.user_name.clone()).await{
+            Ok(data)=>{data},
+            Err(err)=>{
+                respData.data = None;
+                respData.server_message = Some(err.to_string());
+                respData.message = "Error getting sell order".to_string();
+
+                return HttpResponse::InternalServerError().json(
+                  respData
+                )  
+            }
+        };
+        
+
+        respData.data = Some(orders);
+        respData.message = "ok".to_string();
+        respData.server_message = None;
+
+        return HttpResponse::Ok().json(
+            respData
+        )
+
 }

@@ -19,14 +19,22 @@ pub async fn create_buy_order(
     database:Data<MongoService>,
     new_order:Json<CreateBuyOrderReq>,
     claim:Option<ReqData<Claims>>
-    )->HttpResponse{
+)->HttpResponse{
     println!("new req");
-    
+    let mut respData = GenericResp::<BuyOrder>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+  
     let claim = match claim {
         Some(claim)=>{claim},
         None=>{
+            respData.message = "Unauthorized".to_string();
+            respData.data = None;
+            respData.server_message = None;
             return HttpResponse::Unauthorized()
-                .json(Response{message:"Not authorized".to_string()})
+                .json(respData)
         }
     };
 
@@ -38,11 +46,12 @@ pub async fn create_buy_order(
     let sell_order_c =match  sell_order_c {
         Ok(data)=>{data},
         Err(err)=>{
+            respData.message = "Error getting  sell order".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+
             return HttpResponse::InternalServerError().json(
-                GenericResp::<String>{
-                    message:"Error getting sell order".to_string(),
-                    data: err.to_string()
-                }
+           respData
             )
         }
     };
@@ -50,20 +59,18 @@ pub async fn create_buy_order(
     // make sure request amount is good fit for the sell order
 
     if new_order.amount > sell_order_c.amount {
+        respData.message = "Buy order is larger than sell order".to_string();
+        respData.data = None;
+        respData.server_message = None;
         return HttpResponse::BadRequest().json(
-            GenericResp::<String>{
-                message:"Buy order is larger than sell order".to_string(),
-                data: "".to_string()
-            }
+          respData
         )
     }
     if new_order.amount > sell_order_c.max_amount || new_order.amount< sell_order_c.min_amount{
-        return HttpResponse::BadRequest().json(
-            GenericResp::<String>{
-                message:"buy order is larger or smaller than sell order".to_string(),
-                data: "".to_string()
-            }
-        )  
+        respData.message = "buy order is larger or smaller than sell order".to_string();
+        respData.data = None;
+        respData.server_message = None;
+        return HttpResponse::BadRequest().json(respData)  
     }
 
     // create buy order
@@ -88,15 +95,16 @@ pub async fn create_buy_order(
     .start_transaction().await{
         Ok(_)=>{},
         Err(err)=>{
+            respData.message = "error creating buy order".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
             return HttpResponse::InternalServerError().json(
-                GenericResp::<String>{
-                    message:"Error creating buy order".to_string(),
-                    data: err.to_string()
-                }
+              respData
             )
         }
     }
 
+    // start transaction
     let result = async {
         create_buy_order_update_sell_order(&mut session, buy_order.clone(), seller_order_id.clone(), sell_order_c.amount - new_order.amount.clone()).await
     }.await;
@@ -109,12 +117,10 @@ pub async fn create_buy_order(
         },
         Err(e) => {
             session.abort_transaction().await;
-            return HttpResponse::InternalServerError().json(
-                GenericResp::<String>{
-                    message:"Error creating buy order".to_string(),
-                    data: e.to_string()
-                }
-            )
+            respData.message = "error creating buy order".to_string();
+            respData.data = None;
+            respData.server_message = Some(e.to_string());
+            return HttpResponse::InternalServerError().json(respData)
         },
     }
 
@@ -153,10 +159,11 @@ pub async fn create_buy_order(
 
     
 
-    return HttpResponse::Ok().json(GenericResp::<BuyOrder>{
-        message:"Successfully created".to_string(),
-        data: buy_order.clone()
-})
+    respData.message = "Ok".to_string();
+    respData.data = Some(buy_order.clone());
+    respData.server_message = None;
+
+    return HttpResponse::Ok().json(respData)
 
 }
 
@@ -166,7 +173,9 @@ async fn  create_buy_order_update_sell_order(
      mut buy_order: BuyOrder,
       sell_order_id:String,
       new_amount:BigDecimal
-    )->Result<(), Error>{
+)->Result<(), Error>{
+
+
     let sell_order_collection = session.client().database(DB_NAME).collection::<SellOrder>(SELL_ORDER_COLLECTION);
     let buy_order_collection = session.client().database(DB_NAME).collection::<BuyOrder>(BUY_ORDER_COLLECTION);
 
@@ -221,11 +230,21 @@ pub async fn get_my_buy_orders(
     claim:Option<ReqData<Claims>>
     )->HttpResponse
     {
+
+        let mut respData = GenericResp::<Vec<BuyOrder>>{
+            message:"".to_string(),
+            server_message: Some("".to_string()),
+            data: None
+        };
+      
         let claim = match claim {
             Some(claim)=>{claim},
             None=>{
+                respData.message = "Unauthorized".to_string();
+                respData.data = None;
+                respData.server_message = None;
                 return HttpResponse::Unauthorized()
-                    .json(Response{message:"Not authorized".to_string()})
+                    .json(respData)
             }
         };
 
@@ -233,19 +252,19 @@ pub async fn get_my_buy_orders(
         let orders = match BuyOrderService::get_all_buy_order_by_username(&database.db, claim.user_name.clone()).await{
             Ok(data)=>{data},
             Err(err)=>{
+                respData.message = "error getting buy order".to_string();
+                respData.data = None;
+                respData.server_message = Some(err.to_string());
                 return HttpResponse::InternalServerError().json(
-                    GenericResp::<String>{
-                        message:"Successfully created".to_string(),
-                        data: err.to_string()
-                    }
+                  respData
                 )  
             }
         };
 
-        return HttpResponse::Ok().json(GenericResp::<Vec<BuyOrder>>{
-            message:"Successfully created".to_string(),
-            data: orders
-        })
+        respData.message = "ok".to_string();
+        respData.data = Some(orders);
+        respData.server_message = None;
+        return HttpResponse::Ok().json(respData)
 
 }
 
@@ -263,12 +282,21 @@ pub async fn get_single_buy_order(
     claim:Option<ReqData<Claims>>,
     info: web::Path<GetBuyOrderPath>
     )->HttpResponse{
+
+        let mut respData = GenericResp::<BuyOrder>{
+            message:"".to_string(),
+            server_message: Some("".to_string()),
+            data: None
+        };
         // get claim 
         let claim = match claim {
             Some(claim)=>{claim},
             None=>{
+                respData.message = "Unauthorized".to_string();
+                respData.data = None;
+                respData.server_message = None;
                 return HttpResponse::Unauthorized()
-                    .json(Response{message:"Not authorized".to_string()})
+                    .json(respData)
             }
         };
 
@@ -278,18 +306,20 @@ pub async fn get_single_buy_order(
                 match data {
                     Some(data)=>{data},
                     None=>{
-                        return HttpResponse::BadRequest().json(GenericResp::<String>{
-                            message:"No data found".to_string(),
-                            data: "".to_string()
-                        }) 
+                        respData.message = "No data found".to_string();
+                        respData.data =None;
+                        respData.server_message = None;
+                        return HttpResponse::BadRequest().json(respData) 
                     }
                 }
             },
             Err(err)=>{
-                return HttpResponse::BadRequest().json(GenericResp::<String>{
-                    message:"Error getting buy order".to_string(),
-                    data: err.to_string()
-                }) 
+                respData.message = "Error getting buy order".to_string();
+                respData.data = None;
+                respData.server_message = Some(err.to_string());
+                return HttpResponse::BadRequest().json(
+                    respData
+                ) 
             }
         };
 
@@ -301,10 +331,11 @@ pub async fn get_single_buy_order(
         //     })  
         // }
 
-        return HttpResponse::Ok().json(GenericResp::<BuyOrder>{
-            message:"Successfully created".to_string(),
-            data: order
-        })
+
+        respData.message = "ok".to_string();
+        respData.data = Some(order);
+        respData.server_message = None;
+        return HttpResponse::Ok().json(respData)
 
 }
 
@@ -317,15 +348,24 @@ pub async fn buyer_confirmed(
 )->HttpResponse
 {
 
-
-          // get claim 
-        let claim = match claim {
-            Some(claim)=>{claim},
-            None=>{
-                return HttpResponse::Unauthorized()
-                    .json(Response{message:"Not authorized".to_string()})
-            }
-        };
+    
+    let mut respData = GenericResp::<BuyOrder>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+        // get claim 
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            
+        respData.message = "Unauthorized".to_string();
+        respData.data = None;
+        respData.server_message = None;
+            return HttpResponse::Unauthorized()
+                .json(respData)
+        }
+    };
 
     // get buy order 
 
@@ -334,27 +374,31 @@ pub async fn buyer_confirmed(
             match data {
                 Some(data)=>{data},
                 None=>{
-                    return HttpResponse::NotFound().json(GenericResp::<String>{
-                        message:"Could not find order".to_string(),
-                        data: "".to_string()
-                    })    
+                    
+                    respData.message = "Could not find order".to_string();
+                    respData.data = None;
+                    respData.server_message = None;
+                    return HttpResponse::NotFound().json(respData)    
                 }
             }
         },
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error getting data".to_string(),
-                data: "".to_string()
-            }) 
+            
+        respData.message = "Error getting buy order".to_string();
+        respData.data = None;
+        respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(
+                respData
+            ) 
         }
     };
 
     // make sure user owns order
     if buy_order.user_name != claim.user_name{
-        return HttpResponse::Unauthorized().json(GenericResp::<String>{
-            message:"Unauthorized".to_string(),
-            data: "".to_string()
-        })  
+        respData.message = "Unauthorized".to_string();
+        respData.data = None;
+        respData.server_message = None;
+        return HttpResponse::Unauthorized().json(respData)  
     }
     // modify order 
     buy_order.is_buyer_confirmed = true;
@@ -363,20 +407,18 @@ pub async fn buyer_confirmed(
     match BuyOrderService::update(&database.db, &buy_order).await {
         Ok(_)=>{},
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error saving data".to_string(),
-                data: err.to_string()
-            }) 
+            respData.message = "Error updating buy order".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData) 
         }
     }
 
 
-
-
-    return HttpResponse::Ok().json(GenericResp::<String>{
-        message:"Successfully updated".to_string(),
-        data: "".to_string()
-    })
+    respData.message = "Buy order confirmed".to_string();
+    respData.data = None;
+    respData.server_message = None;
+    return HttpResponse::Ok().json(respData)
 }
 
 
@@ -389,16 +431,23 @@ pub async fn seller_confirmed(
     info: web::Path<GetBuyOrderPath>
 )->HttpResponse
 {
+    let mut respData = GenericResp::<BuyOrder>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
 
-
-          // get claim 
-        let claim = match claim {
-            Some(claim)=>{claim},
-            None=>{
-                return HttpResponse::Unauthorized()
-                    .json(Response{message:"Not authorized".to_string()})
-            }
-        };
+        // get claim 
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+            respData.data = None;
+            respData.server_message = None;
+            return HttpResponse::Unauthorized()
+                .json(respData)
+        }
+    };
 
     // get buy order 
 
@@ -407,18 +456,18 @@ pub async fn seller_confirmed(
             match data {
                 Some(data)=>{data},
                 None=>{
-                    return HttpResponse::NotFound().json(GenericResp::<String>{
-                        message:"Could not find order".to_string(),
-                        data: "".to_string()
-                    })    
+                    respData.message = "Could not find order".to_string();
+                    respData.data = None;
+                    respData.server_message = None;
+                    return HttpResponse::NotFound().json(respData)    
                 }
             }
         },
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error getting data".to_string(),
-                data: err.to_string()
-            }) 
+            respData.message = "Error getting data".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData) 
         }
     };
 
@@ -426,19 +475,19 @@ pub async fn seller_confirmed(
     let sell_order =match  SellOrderService::get_sell_order_by_id(&database.db, buy_order.sell_order_id.to_owned()).await{
         Ok(data)=>{data},
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error getting data".to_string(),
-                data: err.to_string()
-            })   
+            respData.message = "Error getting data".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData)   
         }
     };
 
     // make sure user owns sell order
     if sell_order.user_name != claim.user_name{
-        return HttpResponse::Unauthorized().json(GenericResp::<String>{
-            message:"Unauthorized".to_string(),
-            data: "".to_string()
-        })  
+        respData.message = "Unauthorized".to_string();
+        respData.data = None;
+        respData.server_message = None;
+        return HttpResponse::Unauthorized().json(respData)  
     }
     // modify order 
     buy_order.is_seller_confirmed = true;
@@ -447,20 +496,19 @@ pub async fn seller_confirmed(
     match BuyOrderService::update(&database.db, &buy_order).await {
         Ok(_)=>{},
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error saving data".to_string(),
-                data: err.to_string()
-            }) 
+            respData.message = "Error saving data".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData) 
         }
     }
 
 
+    respData.message = "Ok".to_string();
+    respData.data = None;
+    respData.server_message = None;
 
-
-    return HttpResponse::Ok().json(GenericResp::<String>{
-        message:"Successfully updated".to_string(),
-        data: "".to_string()
-    })
+    return HttpResponse::Ok().json(respData)
 }
 
 
@@ -471,13 +519,20 @@ pub async fn cancel_buy_order(
     claim:Option<ReqData<Claims>>,
     info: web::Path<GetBuyOrderPath>
 )->HttpResponse{
-
+    let mut respData = GenericResp::<BuyOrder>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
     // get claim 
     let claim = match claim {
         Some(claim)=>{claim},
         None=>{
+            respData.message = "Not authorized".to_string();
+            respData.data = None;
+            respData.server_message = None;
             return HttpResponse::Unauthorized()
-                .json(Response{message:"Not authorized".to_string()})
+                .json(respData)
         }
     };
 
@@ -488,27 +543,27 @@ pub async fn cancel_buy_order(
             match data {
                 Some(data)=>{data},
                 None=>{
-                    return HttpResponse::NotFound().json(GenericResp::<String>{
-                        message:"Could not find order".to_string(),
-                        data: "".to_string()
-                    })    
+                    respData.message = "Could not find data".to_string();
+                    respData.data = None;
+                    respData.server_message = None;
+                    return HttpResponse::NotFound().json(respData)    
                 }
             }
         },
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error getting data".to_string(),
-                data: err.to_string()
-            }) 
+            respData.message = "Error getting data".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData) 
         }
     };
 
     // make sure request user is the order owner
     if buy_order.user_name != claim.user_name{
-        return HttpResponse::Unauthorized().json(GenericResp::<String>{
-            message:"Unauthorized ".to_string(),
-            data: "".to_string()
-        }) 
+        respData.message = "Not authorized".to_string();
+        respData.data = None;
+        respData.server_message = None;
+        return HttpResponse::Unauthorized().json(respData) 
     }
 
     // update order
@@ -518,16 +573,17 @@ pub async fn cancel_buy_order(
     match BuyOrderService::update(&database.db, &buy_order).await{
         Ok(_)=>{},
         Err(err)=>{
-            return HttpResponse::BadRequest().json(GenericResp::<String>{
-                message:"Error updating order ".to_string(),
-                data: err.to_string()
-            })   
+            respData.message = "Error updating order".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData)   
         }
     }
 
 
-    return HttpResponse::Ok().json(GenericResp::<String>{
-        message:"Successfull ".to_string(),
-        data: "".to_string()
-    })
+    respData.message = "Ok".to_string();
+    respData.data = None;
+    respData.server_message = None;
+    return HttpResponse::Ok().json(respData)
 }
+

@@ -17,7 +17,8 @@ pub struct Response {
 #[derive(Serialize)]
 pub struct GenericResp<T> {
     pub message: String,
-    pub data:T
+    pub server_message: Option<String>,
+    pub data:Option<T>
 }
 
 

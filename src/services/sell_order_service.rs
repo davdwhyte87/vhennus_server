@@ -84,20 +84,42 @@ impl SellOrderService {
         ];
 
         let mut sell_orders:Vec<SellOrder> = Vec::new();
-        let order =  collection.aggregate(pipeline).await;
-        let order_data = match order {
-            Ok(mut data)=>{
-                
-                while let Some(result) = data.next().await{
-                    let data: SellOrder= from_document(result?)?;
-                    sell_orders.push(data);
+        let mut cursor =  collection.aggregate(pipeline).await;
+        match cursor {
+            Ok(mut cursor)=>{
+                if let Some(result) = cursor.next().await{
+                    match result {
+                        Ok(res)=>{
+                            let data: SellOrder= from_document(res)?;
+                            return Ok(data);
+                        },
+                        Err(err)=>{
+                            return Err(err.into()) ;
+                        }
+                    };
+                }else{
+                    return Err(Box::from("Error getting data")) ;
                 }
-                return Ok(sell_orders[0].clone());
-            }, 
+            },
             Err(err)=>{
-                return Err(err.into())
+                return Err(err.into()) ;
             }
         };
+  
+        // match order {
+        //     Ok(mut data)=>{
+                
+            
+        //             //sell_orders.push(data);
+        //         };
+        //         // return Ok(sell_orders[0].clone());
+        //     }, 
+        //     Err(err)=>{
+        //         return Err(err.into())
+        //     }
+        // };
+
+
         
     }
 

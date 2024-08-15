@@ -17,6 +17,11 @@ pub async fn create_payment_method(
     req:Json<CreatePaymentMethodReq>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
+    let mut respData = GenericResp::<PaymentMethodData>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
 
     let claim = match claim {
         Some(claim)=>{claim},
@@ -41,19 +46,22 @@ pub async fn create_payment_method(
     match PaymentMethodService::create_payment_method(&database.db, &payment_method).await{
         Ok(_)=>{},
         Err(err)=>{
+            respData.message = "Error creating payment method".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+
             return HttpResponse::BadRequest().json(
-                GenericResp::<String>{
-                    message:"Error creating payment method".to_string(),
-                    data: err.to_string()
-                }
+             respData
             )  
         }
     }
+
+    respData.message = "Ok".to_string();
+    respData.data = Some(payment_method);
+    respData.server_message = None;
+
     return HttpResponse::Ok().json(
-        GenericResp::<PaymentMethodData>{
-            message:"OK".to_string(),
-            data: payment_method
-        }
+     respData
     )  
 }
 
@@ -71,11 +79,20 @@ pub async fn delete_payment_method(
 )->HttpResponse
 {
 
+    let mut respData = GenericResp::<Vec<SellOrder>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
     let claim = match claim {
         Some(claim)=>{claim},
         None=>{
+            respData.message = "Unauthorized".to_string();
             return HttpResponse::Unauthorized()
-                .json(Response{message:"Not authorized".to_string()})
+                .json(
+                    respData
+                )
         }
     };
  
@@ -83,19 +100,20 @@ pub async fn delete_payment_method(
     match PaymentMethodService::delete_user_payment_method(&database.db, info.id.to_owned()).await{
         Ok(_)=>{},
         Err(err)=>{
+            respData.message = "Error deleting payment method".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
             return HttpResponse::BadRequest().json(
-                GenericResp::<String>{
-                    message:"Error deleting payment method".to_string(),
-                    data: err.to_string()
-                }
+             respData
             )  
         }
     }
+    respData.message = "Ok".to_string();
+    respData.data = None;
+    respData.server_message = None;
+
     return HttpResponse::Ok().json(
-        GenericResp::<String>{
-            message:"OK".to_string(),
-            data: "".to_string()
-        }
+        respData
     )  
 }
 
@@ -108,30 +126,40 @@ pub async fn get_my_payment_methods(
    
 )->HttpResponse
 {
+    let mut respData = GenericResp::<Vec<PaymentMethodData>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
     let claim = match claim {
         Some(claim)=>{claim},
         None=>{
+            respData.message = "Not authorized".to_string();
+            respData.data = None;
+            respData.server_message = None;
             return HttpResponse::Unauthorized()
-                .json(Response{message:"Not authorized".to_string()})
+                .json(respData)
         }
     };
 
     let methods = match PaymentMethodService::get_all_user_payment_method_data(&database.db, claim.user_name.to_owned()).await{
         Ok(data)=>{data},
         Err(err)=>{
+       
+            respData.message = "Error getting  payment method".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+
             return HttpResponse::BadRequest().json(
-                GenericResp::<String>{
-                    message:"Error getting payment method".to_string(),
-                    data: err.to_string()
-                }
+            respData
             )  
         } 
     };
 
+    respData.message = "Ok".to_string();
+    respData.data =Some(methods);
+    respData.server_message = None;
     return HttpResponse::Ok().json(
-        GenericResp::<Vec<PaymentMethodData>>{
-            message:"OK".to_string(),
-            data: methods
-        }
+      respData
     ) 
 }

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::string::ToString;
+use std::{default, string::ToString};
 use strum_macros;
 
 
@@ -22,8 +22,9 @@ pub struct PaypalPaymentMethod {
 }
 
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq,strum_macros::Display )]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq,strum_macros::Display, Default)]
 pub enum PaymentMethod {
+    #[default]
     Bank,
     Paypal,
     Skrill,
