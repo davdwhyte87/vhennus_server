@@ -4,6 +4,7 @@ use actix_web::web::{Data, resource, route, service};
 
 
 mod controllers;
+use controllers::buy_order_controller::seller_confirmed;
 use controllers::{
     buy_order_controller, payment_method_controller, player_controller, power_ups_controller, sell_order_controller, user_controller, wallet_controller
 
@@ -71,6 +72,7 @@ async fn main() -> std::io::Result<()> {
                         .service(sell_order_controller::get_single_sell_order)
                         .service(sell_order_controller::cancel_sell_order)
                         .service(sell_order_controller::update_sell_order)
+                        .service(sell_order_controller::get_all_open_sell_orders)
                     )
                     .service(
                         web::scope("buy_order")

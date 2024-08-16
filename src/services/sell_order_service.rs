@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use futures::StreamExt;
-use mongodb::{bson::{doc, from_document}, results::InsertOneResult, Database};
+use mongodb::{bson::{doc, from_document, Bson, Document}, results::InsertOneResult, Database};
 
 use crate::models::{payment_method::PaymentMethod, sell_order::SellOrder};
 use strum_macros::{EnumString, ToString};
@@ -44,6 +44,43 @@ impl SellOrderService {
        let mut sell_orders:Vec<SellOrder> = Vec::new();
        while let Some(result) = results.next().await{
            let data: SellOrder= from_document(result?)?;
+           sell_orders.push(data);
+       }
+       return Ok(sell_orders);
+    }
+
+
+    
+    pub async fn get_sell_order_by_filter(db:&Database, filter:Document)->Result<Vec<SellOrder>, Box<dyn Error>>{
+        
+        let collection = db.collection::<SellOrder>(SELL_ORDER_COLLECTION);
+        let lookup_2 = doc! {
+            "$lookup":
+               {
+                  "from": "BuyOrder",
+                  "localField": "buy_orders_id",
+                  "foreignField": "id",
+                  "as": "buy_orders"
+               }
+            };
+        let match_1 = doc! {
+            "$match":filter
+        };
+
+       let mut results = match collection.aggregate(vec![match_1]).await{
+        Ok(dd)=>{dd},
+        Err(err)=>{
+            return Err(err.into())
+        }
+       };
+       let mut sell_orders:Vec<SellOrder> = Vec::new();
+       while let Some(result) = results.next().await{
+           let data: SellOrder= match from_document(result?){
+            Ok(d)=>{d},
+            Err(err)=>{
+                return Err(err.into())
+            }
+           };
            sell_orders.push(data);
        }
        return Ok(sell_orders);

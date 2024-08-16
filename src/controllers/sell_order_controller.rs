@@ -2,7 +2,8 @@ use std::str::FromStr;
 
 use actix_web::{ get, post, web::{self, Data, ReqData}, HttpResponse};
 use actix_web_validator::Json;
-use bigdecimal::BigDecimal;
+use bigdecimal::{num_bigint::BigInt, BigDecimal};
+use mongodb::bson::doc;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -143,7 +144,7 @@ struct GetSingleSellOrderPath {
     id: String,
 }
 
-#[get("/{id}")]
+#[get("/single/{id}")]
 pub async fn get_single_sell_order(
 
     database:Data<MongoService>,
@@ -174,6 +175,29 @@ pub async fn get_single_sell_order(
             return HttpResponse::Ok().json(respData) 
         }
     };
+
+
+    let mut is_done = true;
+    // check if sell order is completed
+    match order.buy_orders.clone() {
+        Some(data)=>{
+            for buy_order in data {
+                if !(buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed) {
+                  is_done = false;
+                }
+            }
+        },
+        None=>{
+
+        }
+
+    }
+    if is_done && order.amount == BigDecimal::from(BigInt::from(0)) {
+        // close the order 
+        let mut n_order = order.clone();
+        n_order.is_closed = true;
+        SellOrderService::update(&database.db, &n_order).await;
+    }
 
     respData.data = Some(order);
 
@@ -367,12 +391,12 @@ pub async fn get_all_open_sell_orders(
         };
 
 
-        let orders = match SellOrderService::get_all_sell_order_by_username(&database.db, claim.user_name.clone()).await{
+        let orders = match SellOrderService::get_sell_order_by_filter(&database.db, doc! {"is_closed":false}).await{
             Ok(data)=>{data},
             Err(err)=>{
                 respData.data = None;
                 respData.server_message = Some(err.to_string());
-                respData.message = "Error getting sell order".to_string();
+                respData.message = "Error ".to_string();
 
                 return HttpResponse::InternalServerError().json(
                   respData

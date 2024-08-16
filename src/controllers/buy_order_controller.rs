@@ -13,7 +13,7 @@ use crate::{models::{buy_order::BuyOrder, response::{ GenericResp, Response}, se
 
 
 
-#[post("/")]
+#[post("/buy")]
 pub async fn create_buy_order(
 
     database:Data<MongoService>,
@@ -502,6 +502,9 @@ pub async fn seller_confirmed(
             return HttpResponse::BadRequest().json(respData) 
         }
     }
+
+    // if 
+    
 
 
     respData.message = "Ok".to_string();
