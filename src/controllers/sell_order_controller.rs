@@ -12,7 +12,7 @@ use crate::{models::{payment_method::PaymentMethod, response::{ GenericResp, Res
 
 
 
-#[post("/")]
+#[post("/sell")]
 pub async fn create_sell_order(
 
     database:Data<MongoService>,

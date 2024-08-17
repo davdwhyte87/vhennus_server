@@ -6,7 +6,7 @@ use actix_web::web::{Data, resource, route, service};
 mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
 use controllers::{
-    buy_order_controller, payment_method_controller, player_controller, power_ups_controller, sell_order_controller, user_controller, wallet_controller
+    buy_order_controller, order_message_controller, payment_method_controller, player_controller, power_ups_controller, sell_order_controller, user_controller, wallet_controller
 
 };
 mod models;
@@ -88,6 +88,11 @@ async fn main() -> std::io::Result<()> {
                         .service(payment_method_controller::create_payment_method)
                         .service(payment_method_controller::delete_payment_method)
                         .service(payment_method_controller::get_my_payment_methods)
+                    )
+                    .service(
+                        web::scope("order_message")
+                        .service(order_message_controller::create_order_message)
+                        .service(order_message_controller::get_order_message)
                     )
 
 

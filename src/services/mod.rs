@@ -14,3 +14,4 @@ pub mod account_service;
 pub mod  sell_order_service;
 pub mod buy_order_service;
 pub mod payment_method_service;
+pub mod message_service;

@@ -275,7 +275,7 @@ struct GetBuyOrderPath {
 }
 
 
-#[get("/{id}")]
+#[get("/single/{id}")]
 pub async fn get_single_buy_order(
 
     database:Data<MongoService>,
@@ -339,7 +339,7 @@ pub async fn get_single_buy_order(
 
 }
 
-#[get("/{id}/buyer_confirmed")]
+#[get("/buyer_confirmed/{id}")]
 pub async fn buyer_confirmed(
 
     database:Data<MongoService>,
@@ -423,7 +423,7 @@ pub async fn buyer_confirmed(
 
 
 
-#[get("/{id}/seller_confirmed")]
+#[get("/seller_confirmed/{id}")]
 pub async fn seller_confirmed(
 
     database:Data<MongoService>,
@@ -516,7 +516,7 @@ pub async fn seller_confirmed(
 
 
 
-#[get("/{id}/cancel")]
+#[get("/cancel/{id}")]
 pub async fn cancel_buy_order(
     database:Data<MongoService>,
     claim:Option<ReqData<Claims>>,
@@ -567,6 +567,15 @@ pub async fn cancel_buy_order(
         respData.data = None;
         respData.server_message = None;
         return HttpResponse::Unauthorized().json(respData) 
+    }
+
+
+    // check if order is completed 
+    if buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed{
+        respData.message = "Buy Order has been completed.".to_string();
+        respData.data = None;
+        respData.server_message = None;
+        return HttpResponse::BadRequest().json(respData) 
     }
 
     // update order

@@ -40,7 +40,11 @@ impl SellOrderService {
                }
             };
 
-       let mut results = collection.aggregate(vec![lookup_2]).await?;
+        let lookup_1 = doc! {
+            "$match":doc! {"user_name": userName}
+        };
+
+       let mut results = collection.aggregate(vec![lookup_1,lookup_2]).await?;
        let mut sell_orders:Vec<SellOrder> = Vec::new();
        while let Some(result) = results.next().await{
            let data: SellOrder= from_document(result?)?;
