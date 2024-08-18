@@ -39,6 +39,13 @@ pub struct  GetCodeReq{
     pub email:String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  CreateKuracoinID{
+    #[validate(length(min=1))]
+    pub user_name:String,
+    pub password:String
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  CreateTestRecordReq{

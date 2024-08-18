@@ -1,15 +1,19 @@
 use std::borrow::{Borrow, BorrowMut};
+use std::env;
+use std::future::IntoFuture;
 use actix_web::{Responder, get, HttpResponse, web::Json, post};
 
-use actix_web::web::{Data, ReqData};
+use actix_web::web::{self, Data, ReqData};
 use handlebars::Handlebars;
+use mongodb::bson::doc;
 use rand::Rng;
+use regex::Replacer;
 use validator::Validate;
 use crate::database::db::db::DB;
 use crate::models::helper::EmailData;
 use crate::models::power_up::{PlayerPowerUp, PowerUpType};
-use crate::models::request_models::{GetCodeReq, LoginReq};
-use crate::models::response::{CodeResp, LoginResp, PlayerRunInfoRes, Response};
+use crate::models::request_models::{CreateKuracoinID, GetCodeReq, LoginReq};
+use crate::models::response::{CodeResp, GenericResp, LoginResp, PlayerRunInfoRes, Response};
 use crate::models::run_info::RunInfo;
 use crate::models::user::{User, UserType};
 use crate::models::wallet::Wallet;
@@ -17,9 +21,11 @@ use crate::req_models::create_user_req::CreateUserReq;
 use crate::services::mongo_service::MongoService;
 use crate::services::power_up_service::PowerUpService;
 use crate::services::run_info_service::RunInfoService;
+use crate::services::tcp::{self, send_to_tcp_server};
 use crate::services::user_service::UserService;
 use crate::services::wallet_service::WalletService;
 use crate::utils::auth::{Claims, decode_token, encode_token};
+use crate::utils::formatter;
 use crate::utils::send_email::send_email;
 
 
@@ -336,4 +342,332 @@ pub async fn check_if_user_exists(database:&Data<MongoService>, email:&String)->
     }
 
     return ok;
+}
+
+// check if user exists
+pub async fn check_if_user_exists_username(database:&Data<MongoService>, user_name:&String)->bool {
+    let mut ok = false;
+
+    let user = UserService::get_by_(
+        &database.db,
+        doc! {"user_name":user_name}
+    ).await;
+
+    match user {
+        Ok(user)=>{
+            match user {
+                Some(_)=>{ok=true},
+                None=>{ok=false}
+            }
+        },
+        Err(_)=>{ok = false}
+    }
+
+    return ok;
+}
+
+#[post("/user/kura_login")]
+pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKuracoinID>)->HttpResponse {
+    let mut respData = GenericResp::<String>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+   
+    //validate request data
+    
+    {
+        match req_data.borrow().validate() {
+            Ok(_) => {},
+            Err(err) => {
+                println!("{}", err.to_string());
+                respData.message = "Error validating request data".to_string();
+                respData.server_message =Some(err.to_string());
+                respData.data = None;
+                return HttpResponse::BadRequest().json(respData);
+            }
+        }
+    }
+
+
+    // check if user exist
+    if !check_if_user_exists_username(&database, &req_data.user_name.to_owned()).await{
+        println!("{}", "User does not exists");
+        respData.message = "User does not exists".to_string();
+        respData.server_message =None;
+        respData.data = None;
+        return HttpResponse::BadRequest().json(respData);
+    }
+
+    
+ 
+
+    // send message to the kuracoin blockchain to create new user
+    let kura_coin_server_ip = match  env::var("KURACOIN_SERVER_ID"){
+        Ok(data)=>{data.to_owned()},
+        Err(err)=>{
+            println!("{}", err.to_string());
+            respData.message = "Error connecting to blockchain".to_string();
+            respData.server_message =Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);
+        }
+    };
+
+    let message_data = match serde_json::to_string(&req_data){
+        Ok(data)=>{data},
+        Err(err)=>{
+            println!("{}", err.to_string());
+            respData.message = "Error persing data".to_string();
+            respData.server_message =Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);  
+        }
+    };
+    let message = formatter::Formatter::request_formatter(
+        "ValidateUserId".to_string(), 
+        message_data,
+        "".to_string(), 
+        "".to_string(),
+        "0".to_string());
+
+    let m = message.clone();
+    let ip = kura_coin_server_ip.clone();
+    let result = web::block(move || send_to_tcp_server(m,ip  )).await;
+    let response_string =match result {
+        Ok(data)=>{
+            match data {
+                Ok(data)=>{data},
+                Err(err)=>{
+                    println!("{}", err.to_string());
+                    respData.message = "Error persing data".to_string();
+                    respData.server_message =Some(err.to_string());
+                    respData.data = None;
+                    return HttpResponse::BadRequest().json(respData);     
+                }
+            }
+        },
+        Err(err)=>{ 
+            println!("{}", err.to_string());
+            respData.message = "Error persing data".to_string();
+            respData.server_message =Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);   
+        }
+    };
+
+    let resp_data: Vec<&str>= response_string.split('\n').collect();
+    let code = match resp_data.get(0){
+        Some(data)=>{data},
+        None=>{
+            respData.message = "Error with blockchain response data".to_string();
+            respData.server_message =None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);     
+        }
+    };
+
+    if(*code != "1"){
+        // blockchain request failed
+        respData.message = "Failed to create digital ID on blockchain".to_string();
+            respData.server_message =None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);     
+    }
+
+
+    // get user data from db after successful login
+    let user = UserService::get_by_(
+        &database.db,
+        doc! {"user_name":req_data.user_name.to_owned()}
+    ).await;
+
+    let user = match user {
+        Ok(user)=>{
+            match user {
+                Some(data)=>{data},
+                None=>{
+                    respData.message = "Could not find user".to_string();
+                    respData.server_message =None;
+                    respData.data = None;
+                    return HttpResponse::BadRequest().json(respData);
+                }
+            }
+        },
+        Err(err)=>{
+            println!("{}", err.to_string());
+            respData.message = "Error getting user data".to_string();
+            respData.server_message =None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);
+        }
+    };
+
+
+    // generate token for user
+    let login_token =encode_token(
+        user.user_type, user.email,user.user_name);
+
+    let login_token = match login_token {
+        Ok(login_token)=>{login_token},
+        Err(err)=>{
+            return HttpResponse::InternalServerError().
+                json(Response{message:"Error getting token".to_string()})
+        }
+    };
+
+
+    respData.message = "Ok".to_string();
+    respData.server_message =None;
+    respData.data = Some(login_token);
+    return HttpResponse::Ok().json(respData);
+
+
+}
+
+
+#[post("/user/kura_signup")]
+pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKuracoinID>)->HttpResponse {
+    let mut respData = GenericResp::<String>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+   
+    //validate request data
+    
+    {
+        match req_data.borrow().validate() {
+            Ok(_) => {},
+            Err(err) => {
+                println!("{}", err.to_string());
+                respData.message = "Error validating request data".to_string();
+                respData.server_message =Some(err.to_string());
+                respData.data = None;
+                return HttpResponse::BadRequest().json(respData);
+            }
+        }
+    }
+
+
+    // check if user exist
+    if check_if_user_exists_username(&database, &req_data.user_name.to_owned()).await{
+        println!("{}", "User exists");
+        respData.message = "User already exists".to_string();
+        respData.server_message =None;
+        respData.data = None;
+        return HttpResponse::BadRequest().json(respData);
+    }
+
+    
+ 
+
+    // send message to the kuracoin blockchain to create new user
+    let kura_coin_server_ip = match  env::var("KURACOIN_SERVER_ID"){
+        Ok(data)=>{data.to_owned()},
+        Err(err)=>{
+            println!("{}", err.to_string());
+            respData.message = "Error connecting to blockchain".to_string();
+            respData.server_message =Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);
+        }
+    };
+
+    let message_data = match serde_json::to_string(&req_data){
+        Ok(data)=>{data},
+        Err(err)=>{
+            println!("{}", err.to_string());
+            respData.message = "Error persing data".to_string();
+            respData.server_message =Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);  
+        }
+    };
+    let message = formatter::Formatter::request_formatter(
+        "CreateUserId".to_string(), 
+        message_data,
+        "".to_string(), 
+        "".to_string(),
+        "0".to_string());
+
+    let m = message.clone();
+    let ip = kura_coin_server_ip.clone();
+    let result = web::block(move || send_to_tcp_server(m,ip  )).await;
+    let response_string =match result {
+        Ok(data)=>{
+            match data {
+                Ok(data)=>{data},
+                Err(err)=>{
+                    println!("{}", err.to_string());
+                    respData.message = "Error persing data".to_string();
+                    respData.server_message =Some(err.to_string());
+                    respData.data = None;
+                    return HttpResponse::BadRequest().json(respData);     
+                }
+            }
+        },
+        Err(err)=>{ 
+            println!("{}", err.to_string());
+            respData.message = "Error persing data".to_string();
+            respData.server_message =Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);   
+        }
+    };
+
+    let resp_data: Vec<&str>= response_string.split('\n').collect();
+    let code = match resp_data.get(0){
+        Some(data)=>{data},
+        None=>{
+            respData.message = "Error with blockchain response data".to_string();
+            respData.server_message =None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);     
+        }
+    };
+
+    if(*code != "1"){
+        // blockchain request failed
+        respData.message = "Failed to create digital ID on blockchain".to_string();
+            respData.server_message =None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);     
+    }
+
+
+
+
+    let user = User{
+        user_name:req_data.user_name.to_owned(),
+        created_at:chrono::offset::Utc::now().to_string(),
+        email:"".to_string(),
+        code:Option::from(93030),
+        user_type:UserType::User,
+        id:None
+    };
+
+  
+    // setup
+    if user.user_type == UserType::User{
+        let user_res = UserService::create_user(database.db.borrow(),&user).await;
+
+        match user_res {
+            Ok(user)=> {},
+            Err(err)=>{
+                respData.message = "Error creating user".to_string();
+                respData.server_message =None;
+                respData.data = None;
+                return HttpResponse::BadRequest().json(respData);  
+            }
+        }
+    }
+
+
+    // 
+
+    respData.message = "Ok".to_string();
+    respData.server_message =None;
+    respData.data = Some(req_data.user_name.to_owned());
+    return HttpResponse::Ok().json(respData);
 }

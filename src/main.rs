@@ -10,6 +10,7 @@ use controllers::{
 
 };
 mod models;
+use dotenv::dotenv;
 use models::{response};
 mod database;
 use database::db::db;
@@ -36,6 +37,7 @@ async fn hello(name: web::Path<String>) -> impl Responder {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv().ok();
 
     env::set_var("RUST_BACKTRACE", "full");
     let db = MongoService::init().await;
@@ -100,6 +102,8 @@ async fn main() -> std::io::Result<()> {
             .service(user_controller::create_user)
             .service(user_controller::login_user)
             .service(power_ups_controller::use_power_up)
+            .service(user_controller::kura_id_signup)
+            .service(user_controller::kura_id_login)
             .service(user_controller::get_code)
             .service(hello)
 

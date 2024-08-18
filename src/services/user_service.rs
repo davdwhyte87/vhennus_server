@@ -4,7 +4,7 @@ use std::io::Read;
 use std::string::ToString;
 use handlebars::Handlebars;
 use mongodb::{Client, Database, options::ClientOptions};
-use mongodb::bson::doc;
+use mongodb::bson::{doc, Document};
 // use mongodb::bson::extjson::de::Error;
 use std::error::Error;
 use mongodb::bson::oid::ObjectId;
@@ -82,6 +82,17 @@ impl UserService{
     pub async fn get_by_email(db:&Database, email:String)->Result<Option<User>, Box<dyn Error>>{
 
         let filter = doc! {"email":email};
+        let collection = db.collection::<User>(COLLECTION_NAME);
+        let user_detail = collection.find_one(filter).await;
+        match user_detail {
+            Ok(user_detail)=>{return Ok(user_detail)},
+            Err(err)=>{return Err(err.into())}
+        };
+    }
+
+    
+    pub async fn get_by_(db:&Database, filter:Document)->Result<Option<User>, Box<dyn Error>>{
+
         let collection = db.collection::<User>(COLLECTION_NAME);
         let user_detail = collection.find_one(filter).await;
         match user_detail {
