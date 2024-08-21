@@ -23,7 +23,9 @@ pub struct SellOrder {
     pub updated_at: Option<String>,
     pub payment_method: PaymentMethod,
     pub payment_method_id: String,
-    pub payment_method_data: Option<PaymentMethodData>
+    pub payment_method_data: Option<PaymentMethodData>,
+    pub wallet_address:String,
+    pub phone_number:Option<String>
 }
 
 

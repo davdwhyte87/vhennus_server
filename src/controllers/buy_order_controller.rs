@@ -1,14 +1,14 @@
-use std::{ str::FromStr};
+use std::{ env, str::FromStr};
 
 use actix_web::{ get, post, web::{self, Data, ReqData}, HttpResponse};
 use actix_web_validator::Json;
 use bigdecimal::BigDecimal;
 use futures::FutureExt;
 use mongodb::{bson::doc, error::Error, Client, ClientSession};
-use serde::Deserialize;
+use serde::{ Deserialize};
 use uuid::Uuid;
 
-use crate::{models::{buy_order::BuyOrder, response::{ GenericResp, Response}, sell_order::{Currency, SellOrder}}, req_models::create_sell_order_req::{CreateBuyOrderReq, CreateSellOrderReq}, services::{buy_order_service::{BuyOrderService, BUY_ORDER_COLLECTION}, mongo_service::{MongoService, DB_NAME}, sell_order_service::{SellOrderService, SELL_ORDER_COLLECTION}}, utils::auth::Claims};
+use crate::{models::{buy_order::BuyOrder, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{Currency, SellOrder}}, req_models::create_sell_order_req::{CreateBuyOrderReq, CreateSellOrderReq}, services::{buy_order_service::{BuyOrderService, BUY_ORDER_COLLECTION}, mongo_service::{MongoService, DB_NAME}, sell_order_service::{SellOrderService, SELL_ORDER_COLLECTION}, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
 
 
 
@@ -85,6 +85,7 @@ pub async fn create_buy_order(
         is_reported:false,
         created_at: chrono::offset::Utc::now().to_string(),
         updated_at: chrono::offset::Utc::now().to_string(),
+        wallet_address: new_order.wallet_address.to_owned()
     };
 
     let seller_order_id = new_order.sell_order_id.to_owned();
@@ -339,6 +340,91 @@ pub async fn get_single_buy_order(
 
 }
 
+
+pub async fn escrow_to_buyer(address:String, amount:BigDecimal)->Result<(),Box<dyn std::error::Error>>{
+     
+
+    // send message to the kuracoin blockchain to create new user
+    let kura_coin_server_ip = match  env::var("KURACOIN_SERVER_ID"){
+        Ok(data)=>{data.to_owned()},
+        Err(err)=>{
+            println!("{}", err.to_string());
+            return  Err(Box::from("Error connecting to blockchain"));
+        }
+    };
+
+    let escrow_wallet = match  env::var("ESCROW_WALLET"){
+        Ok(data)=>{data.to_owned()},
+        Err(err)=>{
+            println!("{}", err.to_string());
+            return  Err(Box::from("Error connecting to blockchain"));
+        }
+    };
+
+    let escrow_wallet_password = match  env::var("ESCROW_WALLET_PASSWORD"){
+        Ok(data)=>{data.to_owned()},
+        Err(err)=>{
+            println!("{}", err.to_string());
+            return  Err(Box::from("Error connecting to blockchain"));
+        }
+    };
+
+    let message_data = match serde_json::to_string(&TransferReq{
+        sender: escrow_wallet,
+        receiver: address,
+        amount: amount,
+        transaction_id: Uuid::new_v4().to_string(),
+        sender_password: escrow_wallet_password
+    }){
+        Ok(data)=>{data},
+        Err(err)=>{
+            println!("{}", err.to_string());
+            return  Err(Box::from("Error parsing data"));
+        }
+    };
+    let message = formatter::Formatter::request_formatter(
+        "Transfer".to_string(), 
+        message_data,
+        "".to_string(), 
+        "".to_string(),
+        "0".to_string());
+
+    let m = message.clone();
+    let ip = kura_coin_server_ip.clone();
+    let result = web::block(move || send_to_tcp_server(m,ip  )).await;
+    let response_string =match result {
+        Ok(data)=>{
+            match data {
+                Ok(data)=>{data},
+                Err(err)=>{
+                    println!("{}", err.to_string());
+                    return  Err(Box::from("Error parsing data"));    
+                }
+            }
+        },
+        Err(err)=>{ 
+            println!("{}", err.to_string());
+            return  Err(Box::from("Error parsing data")); 
+        }
+    };
+
+    let resp_data: Vec<&str>= response_string.split('\n').collect();
+    let code = match resp_data.get(0){
+        Some(data)=>{data},
+        None=>{
+            return  Err(Box::from("Error decoding data from blockchain server"));    
+        }
+    };
+
+    if(*code != "1"){
+        // blockchain request failed
+        return  Err(Box::from("Failed trnasfer on blockchain"));   
+    }
+
+    return Ok(())
+
+}
+
 #[get("/buyer_confirmed/{id}")]
 pub async fn buyer_confirmed(
 
@@ -412,6 +498,20 @@ pub async fn buyer_confirmed(
             respData.server_message = Some(err.to_string());
             return HttpResponse::BadRequest().json(respData) 
         }
+    }
+
+    // check if it is time to release coins
+    if buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed {
+       match escrow_to_buyer(buy_order.wallet_address, buy_order.amount).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            println!("unable to release coins {}", err.to_string());
+            respData.message = "Unable to release coins".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::InternalServerError().json(respData)  
+        }
+       }
     }
 
 
@@ -503,7 +603,20 @@ pub async fn seller_confirmed(
         }
     }
 
-    // if 
+    
+     // check if it is time to release coins
+     if buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed {
+        match escrow_to_buyer(buy_order.wallet_address, buy_order.amount).await{
+         Ok(_)=>{},
+         Err(err)=>{
+             println!("unable to release coins {}", err.to_string());
+             respData.message = "Unable to release coins".to_string();
+             respData.data = None;
+             respData.server_message = Some(err.to_string());
+             return HttpResponse::InternalServerError().json(respData)  
+         }
+        }
+     }
     
 
 

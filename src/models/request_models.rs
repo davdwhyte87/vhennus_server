@@ -1,4 +1,5 @@
 
+use bigdecimal::BigDecimal;
 use mongodb::bson::oid::ObjectId;
 use serde_derive::{Deserialize, Serialize};
 use validator::Validate;
@@ -44,6 +45,17 @@ pub struct  CreateKuracoinID{
     #[validate(length(min=1))]
     pub user_name:String,
     pub password:String
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  TransferReq{
+    #[validate(length(min=1))]
+    pub sender:String,
+    pub receiver:String,
+    pub amount:BigDecimal,
+    pub transaction_id: String,
+    pub sender_password: String
 }
 
 

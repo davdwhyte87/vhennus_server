@@ -13,7 +13,10 @@ pub struct CreateSellOrderReq{
     //pub max_amount:BigDecimal, 
     pub currency:Currency,
     pub payment_method: PaymentMethod,
-    pub payment_method_id: String
+    pub payment_method_id: String,
+    pub wallet_address:String,
+    pub password:String, 
+    pub phone_number:String
 }
 
 
@@ -32,5 +35,6 @@ pub struct UpdateSellOrderReq{
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateBuyOrderReq{
     pub amount:BigDecimal,
-    pub sell_order_id: String
+    pub sell_order_id: String,
+    pub wallet_address:String
 }
