@@ -7,7 +7,7 @@ use mongodb::bson::doc;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{models::{payment_method::PaymentMethod, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, sell_order_service::SellOrderService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
+use crate::{controllers::buy_order_controller::escrow_to_user, models::{payment_method::PaymentMethod, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, sell_order_service::SellOrderService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
 
 
 
@@ -371,6 +371,7 @@ pub async fn cancel_sell_order(
     match SellOrderService::update(&database.db, &order).await{
         Ok(_)=>{},
         Err(err)=>{
+            println!("{}", err.to_string());
             respData.message = "error updating sell order".to_string();
             respData.data = None;
             respData.server_message = Some(err.to_string());
@@ -378,6 +379,21 @@ pub async fn cancel_sell_order(
             return HttpResponse::InternalServerError().json(respData)  ;
         }
     }
+
+    match escrow_to_user(order.wallet_address.to_owned(), order.amount.to_owned()).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            println!("{}", err.to_string());
+            respData.message = "error moving coins to wallet".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
+
+    // move the remaining funds back to the user wallet
+
 
     respData.data = Some(order);
     respData.message = "Ok".to_string();

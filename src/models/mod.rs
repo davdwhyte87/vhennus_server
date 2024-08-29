@@ -15,3 +15,5 @@ pub mod buy_order;
 pub  mod  payment_method;
 pub mod message;
 pub mod trade_contact;
+pub mod post;
+pub mod comment;

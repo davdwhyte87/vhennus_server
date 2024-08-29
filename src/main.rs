@@ -1,12 +1,13 @@
-use std::env;
-use actix_web::{get, web, App, HttpServer, Responder};
-use actix_web::web::{Data, resource, route, service};
+use std::{env, fmt};
+use actix_web::error::JsonPayloadError;
+use actix_web::{error, get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
+use actix_web::web::{resource, route, service, Data, JsonConfig};
 
 
 mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
 use controllers::{
-    buy_order_controller, order_message_controller, payment_method_controller, player_controller, power_ups_controller, sell_order_controller, user_controller, wallet_controller
+    buy_order_controller, order_message_controller, payment_method_controller, player_controller, post_controller, power_ups_controller, sell_order_controller, user_controller, wallet_controller
 
 };
 mod models;
@@ -15,7 +16,9 @@ use models::{response};
 mod database;
 use database::db::db;
 mod services;
+use serde_json::json;
 use services::{user_service, pet_service, diagnosis_service};
+use thiserror::Error;
 use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
@@ -35,22 +38,46 @@ async fn hello(name: web::Path<String>) -> impl Responder {
     format!("Hello {}!", &name)
 }
 
+
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+
+
     dotenv().ok();
 
     env::set_var("RUST_BACKTRACE", "full");
     let db = MongoService::init().await;
     let db_data = Data::new(db);
+
+    struct ApiError{
+       
+
+    }
+    impl ApiError {
+
+        pub fn json_error(cfg: JsonConfig) -> JsonConfig {
+            cfg.limit(4096).error_handler(|err: JsonPayloadError, _req| {
+                // create custom error response
+                error::InternalError::from_response(
+                    format!("JSON error: {:?}", err),
+                    HttpResponse::from_error(err),
+                ).into()
+            })
+        }
+    }
+
     HttpServer::new(move|| {
+        
         App::new()
             .app_data(db_data.clone())
-
+            
             // USER CONTROLLERS
 
             .service(
                 // all authenticated endpoints
                 web::scope("api/v1/auth")
+                
                     .service(user_controller::say_hello)
                     .wrap(middlewares::auth_middleware::AuthM)
                   
@@ -96,6 +123,12 @@ async fn main() -> std::io::Result<()> {
                         .service(order_message_controller::create_order_message)
                         .service(order_message_controller::get_order_message)
                     )
+                    .service(
+                        web::scope("post")
+                        .service(post_controller::create_post)
+                        .service(post_controller::create_comment)
+                        .service(post_controller::get_all_posts)
+                    )
 
 
             )
@@ -106,6 +139,7 @@ async fn main() -> std::io::Result<()> {
             .service(user_controller::kura_id_login)
             .service(user_controller::get_code)
             .service(hello)
+            
 
             //
 

@@ -341,7 +341,7 @@ pub async fn get_single_buy_order(
 }
 
 
-pub async fn escrow_to_buyer(address:String, amount:BigDecimal)->Result<(),Box<dyn std::error::Error>>{
+pub async fn escrow_to_user(address:String, amount:BigDecimal)->Result<(),Box<dyn std::error::Error>>{
      
 
     // send message to the kuracoin blockchain to create new user
@@ -502,7 +502,7 @@ pub async fn buyer_confirmed(
 
     // check if it is time to release coins
     if buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed {
-       match escrow_to_buyer(buy_order.wallet_address, buy_order.amount).await{
+       match escrow_to_user(buy_order.wallet_address, buy_order.amount).await{
         Ok(_)=>{},
         Err(err)=>{
             println!("unable to release coins {}", err.to_string());
@@ -606,7 +606,7 @@ pub async fn seller_confirmed(
     
      // check if it is time to release coins
      if buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed {
-        match escrow_to_buyer(buy_order.wallet_address, buy_order.amount).await{
+        match escrow_to_user(buy_order.wallet_address, buy_order.amount).await{
          Ok(_)=>{},
          Err(err)=>{
              println!("unable to release coins {}", err.to_string());

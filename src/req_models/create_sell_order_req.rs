@@ -19,6 +19,17 @@ pub struct CreateSellOrderReq{
     pub phone_number:String
 }
 
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct CreatePostReq{
+    #[validate(email)]
+    pub text:String
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct CreateCommentReq{
+    pub text:String
+}
+
 
 
 #[derive(Debug, Serialize, Deserialize, Validate)]

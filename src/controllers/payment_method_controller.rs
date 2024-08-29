@@ -40,7 +40,8 @@ pub async fn create_payment_method(
         other: req.other.to_owned(),
         paypal_email: req.paypal_email.to_owned(),
         venmo_username: req.venmo_username.to_owned(),
-        skrill_email:req.skrill_email.to_owned()
+        skrill_email:req.skrill_email.to_owned(),
+        name: req.name.to_owned()
     };
 
     match PaymentMethodService::create_payment_method(&database.db, &payment_method).await{

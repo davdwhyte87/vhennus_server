@@ -17,5 +17,6 @@ pub struct CreatePaymentMethodReq{
     pub other:String,
     pub paypal_email:String, 
     pub venmo_username:String, 
-    pub skrill_email:String
+    pub skrill_email:String,
+    pub name:String
 }

@@ -6,6 +6,7 @@ use strum_macros;
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentMethodData {
     pub id:String,
+    pub name:String,
     pub user_name:String,
     pub payment_method: PaymentMethod,
     pub account_name:String,
