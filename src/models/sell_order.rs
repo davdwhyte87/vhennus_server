@@ -15,6 +15,7 @@ pub struct SellOrder {
     pub buy_orders_id:Vec<String>,
     pub buy_orders: Option<Vec<BuyOrder>>,
     pub amount:BigDecimal,
+    pub price: BigDecimal,
     pub min_amount:BigDecimal,
     pub max_amount:BigDecimal,
     pub is_closed:bool,

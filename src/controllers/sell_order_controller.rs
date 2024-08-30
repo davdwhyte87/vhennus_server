@@ -156,7 +156,8 @@ pub async fn create_sell_order(
         payment_method_id: new_order.payment_method_id.to_owned(),
         payment_method_data: None,
         wallet_address: new_order.wallet_address.to_owned(),
-        phone_number: Some(new_order.phone_number.to_owned())
+        phone_number: Some(new_order.phone_number.to_owned()),
+        price:new_order.price.to_owned()
     };
 
     // save order
@@ -381,7 +382,9 @@ pub async fn cancel_sell_order(
     }
 
     match escrow_to_user(order.wallet_address.to_owned(), order.amount.to_owned()).await{
-        Ok(_)=>{},
+        Ok(_)=>{
+            // update price data 
+        },
         Err(err)=>{
             println!("{}", err.to_string());
             respData.message = "error moving coins to wallet".to_string();

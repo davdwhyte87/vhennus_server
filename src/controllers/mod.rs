@@ -9,6 +9,8 @@ pub mod  buy_order_controller;
 pub mod payment_method_controller;
 pub mod order_message_controller;
 pub mod post_controller;
+pub mod system_controller;
+
 
 
 pub const DIAGNOSIS_CONTROLLER_PATH:&str = "/api/v1";

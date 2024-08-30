@@ -17,3 +17,5 @@ pub mod message;
 pub mod trade_contact;
 pub mod post;
 pub mod comment;
+pub mod price;
+pub mod system;

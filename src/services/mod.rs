@@ -18,3 +18,4 @@ pub mod message_service;
 pub mod tcp;
 pub mod trade_contact_service;
 pub mod post_service;
+pub mod system_service;
