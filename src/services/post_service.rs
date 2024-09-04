@@ -23,7 +23,10 @@ impl PostService {
 
         let res = match res_sell_order {
             Ok(data)=>{data},
-            Err(err)=>{return Err(err.into())}
+            Err(err)=>{
+                log::error!(" error inserting into db  {}", err.to_string());
+                return Err(err.into())
+            }
         };
         Ok(res)
     }
@@ -42,13 +45,13 @@ impl PostService {
                 match data{
                     Some(data)=>{data},
                     None=>{
-                        println!("post not found ");
+                        log::info!(" post not found");
                         return Err(Box::from("post not found"))
                     }
                 }
             },
             Err(err)=>{
-                println!("post not found ");
+                log::error!(" error fetching post {}", err.to_string());
                 return Err(err.into())
             }
         };
@@ -57,7 +60,10 @@ impl PostService {
 
         let res = match res_sell_order {
             Ok(data)=>{data},
-            Err(err)=>{return Err(err.into())}
+            Err(err)=>{
+                log::error!(" error inserting comment data into db {}", err.to_string());
+                return Err(err.into())
+            }
         };
         // update post
         post.comments_ids.push(comment.id.to_owned());
@@ -66,7 +72,7 @@ impl PostService {
         }}).await{
             Ok(data)=>{},
             Err(err)=>{
-                println!("error updating {}", err.to_string());
+                log::error!(" error updating post {}", err.to_string());
                 return Err(err.into())
             }
         }

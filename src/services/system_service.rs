@@ -38,10 +38,12 @@ impl SystemService {
 
         match res{
             Ok(data)=>{
+                
                 return  Ok(data);
 
             },
             Err(err)=>{
+                log::error!(" error getting system data  {}", err.to_string());
                 return Err(err.into())
             }
         }
@@ -62,6 +64,7 @@ impl SystemService {
         match res {
             Ok(_)=>{ return Ok(())},
             Err(err)=>{
+                log::error!(" error updating system data  {}", err.to_string());
                 return Err(err.into())
             }
         }

@@ -14,7 +14,7 @@ use mongodb::error::{ErrorKind};
 use r2d2_mongodb::mongodb::Error::OperationError;
 use crate::models::test_data::TestData;
 use crate::models::wallet::Wallet;
-
+use log;
 const COLLECTION_NAME:&str = "Wallet";
 
 
@@ -34,7 +34,10 @@ impl WalletService{
             Ok(user_detail)=>{
                 user_detail
             },
-            Err(err)=>{return Err(err.into())}
+            Err(err)=>{
+                log::error!("error getting wallet by id {}", err.to_string());
+                return Err(err.into())
+            }
         };
         Ok(user_detail)
     }

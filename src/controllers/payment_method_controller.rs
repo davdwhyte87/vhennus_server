@@ -47,6 +47,7 @@ pub async fn create_payment_method(
     match PaymentMethodService::create_payment_method(&database.db, &payment_method).await{
         Ok(_)=>{},
         Err(err)=>{
+            log::error!(" error creating payment method {}", err.to_string());
             respData.message = "Error creating payment method".to_string();
             respData.data = None;
             respData.server_message = Some(err.to_string());
@@ -101,6 +102,7 @@ pub async fn delete_payment_method(
     match PaymentMethodService::delete_user_payment_method(&database.db, info.id.to_owned()).await{
         Ok(_)=>{},
         Err(err)=>{
+            log::error!("error deleting payment method  {}", err.to_string());
             respData.message = "Error deleting payment method".to_string();
             respData.data = None;
             respData.server_message = Some(err.to_string());
@@ -146,7 +148,7 @@ pub async fn get_my_payment_methods(
     let methods = match PaymentMethodService::get_all_user_payment_method_data(&database.db, claim.user_name.to_owned()).await{
         Ok(data)=>{data},
         Err(err)=>{
-       
+            log::error!(" error  gettting user payment mthods {}", err.to_string());
             respData.message = "Error getting  payment method".to_string();
             respData.data = None;
             respData.server_message = Some(err.to_string());

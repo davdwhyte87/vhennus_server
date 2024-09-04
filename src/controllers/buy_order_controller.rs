@@ -8,7 +8,7 @@ use mongodb::{bson::doc, error::Error, Client, ClientSession};
 use serde::{ Deserialize};
 use uuid::Uuid;
 
-use crate::{models::{buy_order::BuyOrder, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{Currency, SellOrder}}, req_models::create_sell_order_req::{CreateBuyOrderReq, CreateSellOrderReq}, services::{buy_order_service::{BuyOrderService, BUY_ORDER_COLLECTION}, mongo_service::{MongoService, DB_NAME}, sell_order_service::{SellOrderService, SELL_ORDER_COLLECTION}, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
+use crate::{models::{buy_order::BuyOrder, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{Currency, SellOrder}}, req_models::create_sell_order_req::{CreateBuyOrderReq, CreateSellOrderReq}, services::{buy_order_service::{BuyOrderService, BUY_ORDER_COLLECTION}, mongo_service::{MongoService}, sell_order_service::{SellOrderService, SELL_ORDER_COLLECTION}, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
 
 
 
@@ -177,8 +177,8 @@ async fn  create_buy_order_update_sell_order(
 )->Result<(), Error>{
 
 
-    let sell_order_collection = session.client().database(DB_NAME).collection::<SellOrder>(SELL_ORDER_COLLECTION);
-    let buy_order_collection = session.client().database(DB_NAME).collection::<BuyOrder>(BUY_ORDER_COLLECTION);
+    let sell_order_collection = session.client().database(&MongoService::get_db_name()).collection::<SellOrder>(SELL_ORDER_COLLECTION);
+    let buy_order_collection = session.client().database(&MongoService::get_db_name()).collection::<BuyOrder>(BUY_ORDER_COLLECTION);
 
     let buy_order_id = buy_order.id.to_owned();
     match buy_order_collection.insert_one(buy_order).await {

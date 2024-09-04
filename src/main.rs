@@ -1,23 +1,25 @@
-use std::{env, fmt};
+use std::{env, error, fmt};
 use actix_web::error::JsonPayloadError;
-use actix_web::{error, get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
+use actix_web::{ get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
 use actix_web::web::{resource, route, service, Data, JsonConfig};
 
 
 mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
 use controllers::{
-    buy_order_controller, order_message_controller, payment_method_controller, player_controller, post_controller, power_ups_controller, sell_order_controller, user_controller, wallet_controller
+    buy_order_controller, order_message_controller, payment_method_controller, post_controller, sell_order_controller, user_controller, wallet_controller
 
 };
 mod models;
 use dotenv::dotenv;
+use get_if_addrs::get_if_addrs;
+use log::{info, error, debug};
 use models::{response};
 mod database;
 use database::db::db;
 mod services;
 use serde_json::json;
-use services::{user_service, pet_service, diagnosis_service};
+use services::{user_service};
 use thiserror::Error;
 use crate::services::mongo_service::MongoService;
 mod utils;
@@ -43,6 +45,8 @@ async fn hello(name: web::Path<String>) -> impl Responder {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
+    log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
+    info!("Starting server..");
 
     dotenv().ok();
 
@@ -50,23 +54,40 @@ async fn main() -> std::io::Result<()> {
     let db = MongoService::init().await;
     let db_data = Data::new(db);
 
-    struct ApiError{
-       
-
-    }
-    impl ApiError {
-
-        pub fn json_error(cfg: JsonConfig) -> JsonConfig {
-            cfg.limit(4096).error_handler(|err: JsonPayloadError, _req| {
-                // create custom error response
-                error::InternalError::from_response(
-                    format!("JSON error: {:?}", err),
-                    HttpResponse::from_error(err),
-                ).into()
-            })
+    let app_env = match env::var("APP_ENV"){
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting mongo url var {}", err.to_string());
+            panic!();
         }
-    }
+    };
 
+    let port = match env::var("PORT"){
+        Ok(data)=>{
+           data
+        },
+        Err(err)=>{
+            error!("error loading env port {}", err.to_string());
+            "8000".to_string();
+            panic!()
+        }
+    };
+
+    // get computer ip
+    let ifaces = get_if_addrs().expect("Failed to get network interfaces");
+
+    // Filter for the first non-loopback IPv4 address
+    let ip_address = ifaces.iter()
+        .filter(|iface| iface.ip().is_ipv4() && !iface.is_loopback())
+        .map(|iface| iface.ip())
+        .next()
+        .expect("No valid IPv4 address found");
+
+    let mut  address =format!("{}:{}","0.0.0.0", port);
+    if app_env == "test" || app_env=="prod"{
+        address =format!("{}:{}",ip_address, port);
+    }
+    info!("Starting server on {}", address);
     HttpServer::new(move|| {
         
         App::new()
@@ -83,14 +104,10 @@ async fn main() -> std::io::Result<()> {
                   
 
                     // runstats
-                    .service(player_controller::update_player_stats)
-                    .service(player_controller::get_player_stats)
-                    .service(player_controller::add_account_details)
+                  
                     .service(wallet_controller::buy_coin)
                     .service(wallet_controller::get_wallet)
-                    .service(power_ups_controller::buy_power_up)
-                    .service(power_ups_controller::use_power_up)
-                    .service(power_ups_controller::get_player_powerups)
+                    
 
                     // sell order
 
@@ -132,7 +149,6 @@ async fn main() -> std::io::Result<()> {
             )
             .service(user_controller::create_user)
             .service(user_controller::login_user)
-            .service(power_ups_controller::use_power_up)
             .service(user_controller::kura_id_signup)
             .service(user_controller::kura_id_login)
             .service(user_controller::get_code)
@@ -143,7 +159,7 @@ async fn main() -> std::io::Result<()> {
 
 
     })
-        .bind(("127.0.0.1", 80))?
+        .bind(address)?
         .run()
         .await
 }

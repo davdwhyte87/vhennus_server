@@ -28,6 +28,7 @@ pub async fn create_post(
     let req = match req {
         Ok(data)=>{data},
         Err(err)=>{
+            log::error!("validation  error  {}", err.to_string());
             respData.message = "Validation error".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
@@ -74,7 +75,7 @@ pub async fn create_post(
     match PostService::create_post(&database.db, &new_post).await {
         Ok(_)=>{},
         Err(err)=>{
-            println!("{}", err);
+            log::error!(" error creating post {}", err.to_string());
             respData.message = "Error creating post".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
@@ -119,6 +120,7 @@ pub async fn get_all_posts(
     let posts = match PostService::get_all_post(&database.db).await{
         Ok(data)=>{data},
         Err(err)=>{
+            log::error!(" error getting posts {}", err.to_string());
             respData.message = "Error getting posts".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
@@ -177,7 +179,7 @@ pub async fn create_comment(
     match PostService::create_comment(&database.db, &new_comment).await {
         Ok(_)=>{},
         Err(err)=>{
-            println!("{}", err);
+            log::error!(" error creating comment {}", err.to_string());
             respData.message = "Error creating comment".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;

@@ -24,7 +24,10 @@ impl OrderMessageService {
 
         let data = match result {
             Ok(data)=>{data},
-            Err(err)=>{return Err(err.into())}
+            Err(err)=>{
+                log::error!(" error inserting into db  {}", err.to_string());
+                return Err(err.into())
+            }
         };
         Ok(data)
     }
@@ -37,6 +40,7 @@ impl OrderMessageService {
         let mut results = match results{
             Ok(dd)=>{dd},
             Err(err)=>{
+                log::error!(" error getting data from db {}", err.to_string());
                 return Err(err.into())
             }
         };
@@ -46,6 +50,7 @@ impl OrderMessageService {
             let data= match result{
                 Ok(data)=>{data},
                 Err(err)=>{
+                    log::error!(" error with cursor  {}", err.to_string());
                     return Err(err.into())
                 }
             };

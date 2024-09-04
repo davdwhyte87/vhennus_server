@@ -7,7 +7,7 @@ use mongodb::bson::doc;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{controllers::buy_order_controller::escrow_to_user, models::{payment_method::PaymentMethod, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, sell_order_service::SellOrderService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
+use crate::{controllers::buy_order_controller::escrow_to_user, models::{payment_method::PaymentMethod, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, sell_order_service::SellOrderService, system_service::SystemService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
 
 
 
@@ -136,6 +136,26 @@ pub async fn create_sell_order(
             return HttpResponse::BadRequest().json(respData);     
     }
 
+    // get system info 
+    let system_data = match SystemService::get_system_data(&database.db).await{
+        Ok(data)=>{
+            match data {
+                Some(data)=>{data},
+                None=>{
+                    respData.data = None;
+                    respData.message = "No Price data set".to_string();
+                    respData.server_message = None;
+                    return HttpResponse::InternalServerError().json(respData);   
+                }
+            }
+        },
+        Err(err)=>{
+            respData.data = None;
+            respData.message = "Error getting system data".to_string();
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::InternalServerError().json(respData);  
+        }
+    };
 
     // amount bigdeci 
     // let amount = BigDecimal::from_str(new_order.amount);
@@ -157,7 +177,7 @@ pub async fn create_sell_order(
         payment_method_data: None,
         wallet_address: new_order.wallet_address.to_owned(),
         phone_number: Some(new_order.phone_number.to_owned()),
-        price:new_order.price.to_owned()
+        price:system_data.price
     };
 
     // save order

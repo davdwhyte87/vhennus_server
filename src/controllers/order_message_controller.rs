@@ -55,6 +55,7 @@ pub async fn create_order_message(
     let response = match OrderMessageService::create_message(&database.db, &order_message).await{
         Ok(data)=>{data},
         Err(err)=>{
+            log::error!(" error getting order messages  {}", err.to_string());
             respData.data = None;
             respData.message = "Error creating message".to_string();
             respData.server_message = Some(err.to_string());
@@ -110,6 +111,7 @@ pub async fn get_order_message(
     let response = match OrderMessageService::get_message(&database.db, filter).await{
         Ok(data)=>{data},
         Err(err)=>{
+            log::error!(" error getting messages  {}", err.to_string());
             respData.data = None;
             respData.message = "Error creating message".to_string();
             respData.server_message = Some(err.to_string());

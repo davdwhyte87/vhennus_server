@@ -22,7 +22,10 @@ impl SellOrderService {
 
         let res_order = match res_sell_order {
             Ok(data)=>{data},
-            Err(err)=>{return Err(err.into())}
+            Err(err)=>{
+                log::error!(" error inserting data  {}", err.to_string());
+                return Err(err.into())
+            }
         };
         Ok(res_order)
     }
@@ -74,6 +77,7 @@ impl SellOrderService {
        let mut results = match collection.aggregate(vec![match_1]).await{
         Ok(dd)=>{dd},
         Err(err)=>{
+            log::error!(" error with aggregation  {}", err.to_string());
             return Err(err.into())
         }
        };
@@ -82,6 +86,7 @@ impl SellOrderService {
            let data: SellOrder= match from_document(result?){
             Ok(d)=>{d},
             Err(err)=>{
+                log::error!(" error converting from document  {}", err.to_string());
                 return Err(err.into())
             }
            };
@@ -135,6 +140,7 @@ impl SellOrderService {
                             return Ok(data);
                         },
                         Err(err)=>{
+                            log::error!(" error with cursor  {}", err.to_string());
                             return Err(err.into()) ;
                         }
                     };
@@ -143,6 +149,7 @@ impl SellOrderService {
                 }
             },
             Err(err)=>{
+                log::error!(" error with aggregation {}", err.to_string());
                 return Err(err.into()) ;
             }
         };
@@ -184,7 +191,7 @@ impl SellOrderService {
         match update_res {
             Ok(_)=>{},
             Err(err)=>{
-
+                log::error!(" error updating db {}", err.to_string());
                 return Err(err.into());
             }
         }

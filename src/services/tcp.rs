@@ -6,7 +6,7 @@ pub fn send_to_tcp_server(message: String, addr: String) -> Result<String, Box<d
     let mut stream = match TcpStream::connect(addr){
         Ok(data)=>{data},
         Err(err)=>{
-            println!("{}", err.to_string());
+            log::error!(" error connecting to TCP stream {}", err.to_string());
             return Err(err.into())
         }
     };
@@ -16,7 +16,7 @@ pub fn send_to_tcp_server(message: String, addr: String) -> Result<String, Box<d
     match stream.write_all(message.as_bytes()){
         Ok(_)=>{},
         Err(err)=>{
-            println!("{}", err.to_string());
+            log::error!(" error writting to stream {}", err.to_string());
             return Err(err.into())
         }
     };
@@ -26,7 +26,7 @@ pub fn send_to_tcp_server(message: String, addr: String) -> Result<String, Box<d
     let n = match stream.read(&mut buffer){
         Ok(n)=>{n},
         Err(err)=>{
-            println!("{}", err.to_string());
+            log::error!(" error reading stream {}", err.to_string());
             return Err(err.into())  
         }
     };

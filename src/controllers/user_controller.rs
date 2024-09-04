@@ -19,8 +19,7 @@ use crate::models::user::{User, UserType};
 use crate::models::wallet::Wallet;
 use crate::req_models::create_user_req::CreateUserReq;
 use crate::services::mongo_service::MongoService;
-use crate::services::power_up_service::PowerUpService;
-use crate::services::run_info_service::RunInfoService;
+
 use crate::services::tcp::{self, send_to_tcp_server};
 use crate::services::user_service::UserService;
 use crate::services::wallet_service::WalletService;
@@ -88,105 +87,6 @@ pub async fn create_user(database:Data<MongoService>, new_user:Json<CreateUserRe
 }
 
 
-// seed run info data for player in the database
-pub async fn create_player_stats(database:&Data<MongoService>, email:&String)->bool{
-    let run_info = RunInfo{
-        id:None,
-        created_at:chrono::offset::Utc::now().to_string(),
-        updated_at: chrono::offset::Utc::now().to_string(),
-        distance: 0,
-        high_score:0,
-        user_email:email.to_string()
-    };
-
-    let create_run_info_res = RunInfoService::create(database.db.borrow(), &run_info).await;
-    match create_run_info_res {
-        Ok(_)=>{},
-        Err(_)=>{return false}
-    }
-    return true
-
-}
-
-
-// seed wallet data
-pub async fn create_player_wallet(database:&Data<MongoService>, email:&String)->bool{
-    let mut ok = false;
-    let wallet = Wallet{
-        user_email:email.to_string(),
-        amount:0,
-        created_at:chrono::offset::Utc::now().to_string(),
-        id:None
-    };
-    let player_wallet = WalletService::create(&database.db,&wallet).await;
-    match player_wallet {
-        Ok(_)=>{
-            ok=true;
-        },
-        Err(err)=>{
-            ok=false;
-        }
-    }
-    return ok;
-}
-
-// seed power up info for player in db
-pub async fn create_player_powerups (database:&Data<MongoService>, email:&String)->bool{
-    let mut ok = false;
-    // phasing powerup
-    let user_power_up = PlayerPowerUp{
-        id:None,
-        created_at:chrono::offset::Utc::now().to_string(),
-        amount:0,
-        in_game_amount:0,
-        power_up_type: PowerUpType::Phasing,
-        user_email:email.to_string()
-    };
-    let create_res = PowerUpService::create_player_powerup(&database.db, &user_power_up).await;
-    let create_res = match create_res {
-        Ok(_)=>{ok = true},
-        Err(_)=>{
-           ok = false;
-        }
-    };
-
-    // blast power up
-    let user_power_up = PlayerPowerUp{
-        id:None,
-        created_at:chrono::offset::Utc::now().to_string(),
-        amount:0,
-        in_game_amount:0,
-        power_up_type: PowerUpType::Blast,
-        user_email:email.to_string()
-    };
-    let create_res = PowerUpService::create_player_powerup(&database.db, &user_power_up).await;
-    let create_res = match create_res {
-        Ok(_)=>{ok = true},
-        Err(_)=>{
-            ok = false;
-        }
-    };
-
-    // slow motion power up
-
-    let user_power_up = PlayerPowerUp{
-        id:None,
-        created_at:chrono::offset::Utc::now().to_string(),
-        amount:0,
-        in_game_amount:0,
-        power_up_type: PowerUpType::SlowMotion,
-        user_email:email.to_string()
-    };
-    let create_res = PowerUpService::create_player_powerup(&database.db, &user_power_up).await;
-    let create_res = match create_res {
-        Ok(_)=>{ok = true},
-        Err(_)=>{
-            ok = false;
-        }
-    };
-
-    return ok;
-}
 
 
 #[post("/user/login")]
@@ -380,7 +280,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
         match req_data.borrow().validate() {
             Ok(_) => {},
             Err(err) => {
-                println!("{}", err.to_string());
+                log::error!(" validation error  {}", err.to_string());
                 respData.message = "Error validating request data".to_string();
                 respData.server_message =Some(err.to_string());
                 respData.data = None;
@@ -406,7 +306,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
     let kura_coin_server_ip = match  env::var("KURACOIN_SERVER_ID"){
         Ok(data)=>{data.to_owned()},
         Err(err)=>{
-            println!("{}", err.to_string());
+            log::error!(" error getting vhenncoin server id {}", err.to_string());
             respData.message = "Error connecting to blockchain".to_string();
             respData.server_message =Some(err.to_string());
             respData.data = None;
@@ -417,7 +317,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
     let message_data = match serde_json::to_string(&req_data){
         Ok(data)=>{data},
         Err(err)=>{
-            println!("{}", err.to_string());
+            log::error!(" error persing req data  {}", err.to_string());
             respData.message = "Error persing data".to_string();
             respData.server_message =Some(err.to_string());
             respData.data = None;
@@ -439,7 +339,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
             match data {
                 Ok(data)=>{data},
                 Err(err)=>{
-                    println!("{}", err.to_string());
+                    log::info!(" error from blockchain {}", err.to_string());
                     respData.message = "Error persing data".to_string();
                     respData.server_message =Some(err.to_string());
                     respData.data = None;
@@ -448,7 +348,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
             }
         },
         Err(err)=>{ 
-            println!("{}", err.to_string());
+            log::error!(" error from blockchain tcpreq  {}", err.to_string());
             respData.message = "Error persing data".to_string();
             respData.server_message =Some(err.to_string());
             respData.data = None;
@@ -495,7 +395,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
             }
         },
         Err(err)=>{
-            println!("{}", err.to_string());
+            log::error!(" error getting user  {}", err.to_string());
             respData.message = "Error getting user data".to_string();
             respData.server_message =None;
             respData.data = None;
@@ -511,6 +411,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
     let login_token = match login_token {
         Ok(login_token)=>{login_token},
         Err(err)=>{
+            log::error!(" error making login token {}", err.to_string());
             return HttpResponse::InternalServerError().
                 json(Response{message:"Error getting token".to_string()})
         }
@@ -540,7 +441,7 @@ pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKur
         match req_data.borrow().validate() {
             Ok(_) => {},
             Err(err) => {
-                println!("{}", err.to_string());
+                log::error!(" validation error {}", err.to_string());
                 respData.message = "Error validating request data".to_string();
                 respData.server_message =Some(err.to_string());
                 respData.data = None;
@@ -552,7 +453,7 @@ pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKur
 
     // check if user exist
     if check_if_user_exists_username(&database, &req_data.user_name.to_owned()).await{
-        println!("{}", "User exists");
+        log::info!(" User exists ");
         respData.message = "User already exists".to_string();
         respData.server_message =None;
         respData.data = None;
@@ -566,7 +467,7 @@ pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKur
     let kura_coin_server_ip = match  env::var("KURACOIN_SERVER_ID"){
         Ok(data)=>{data.to_owned()},
         Err(err)=>{
-            println!("{}", err.to_string());
+            log::error!(" error getting vhenncoin server IP  {}", err.to_string());
             respData.message = "Error connecting to blockchain".to_string();
             respData.server_message =Some(err.to_string());
             respData.data = None;
@@ -577,7 +478,7 @@ pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKur
     let message_data = match serde_json::to_string(&req_data){
         Ok(data)=>{data},
         Err(err)=>{
-            println!("{}", err.to_string());
+            log::error!(" error persing request data   {}", err.to_string());
             respData.message = "Error persing data".to_string();
             respData.server_message =Some(err.to_string());
             respData.data = None;
@@ -599,8 +500,8 @@ pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKur
             match data {
                 Ok(data)=>{data},
                 Err(err)=>{
-                    println!("{}", err.to_string());
-                    respData.message = "Error persing data".to_string();
+                    log::info!(" error from tcp {}", err.to_string());
+                    respData.message = "Error from blockchain".to_string();
                     respData.server_message =Some(err.to_string());
                     respData.data = None;
                     return HttpResponse::BadRequest().json(respData);     
@@ -608,7 +509,7 @@ pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKur
             }
         },
         Err(err)=>{ 
-            println!("{}", err.to_string());
+            log::error!(" error from blockchain tcp req {}", err.to_string());
             respData.message = "Error persing data".to_string();
             respData.server_message =Some(err.to_string());
             respData.data = None;
@@ -655,6 +556,7 @@ pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKur
         match user_res {
             Ok(user)=> {},
             Err(err)=>{
+                log::error!(" error creating user {}", err.to_string());
                 respData.message = "Error creating user".to_string();
                 respData.server_message =None;
                 respData.data = None;

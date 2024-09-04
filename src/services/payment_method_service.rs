@@ -26,7 +26,10 @@ impl PaymentMethodService {
 
         let res_order = match res_sell_order {
             Ok(data)=>{data},
-            Err(err)=>{return Err(err.into())}
+            Err(err)=>{
+                log::error!(" error inserting into db {}", err.to_string());
+                return Err(err.into())
+            }
         };
         Ok(res_order)
     }
@@ -42,6 +45,7 @@ impl PaymentMethodService {
 
             },
             Err(err)=>{
+                log::error!(" error getting data from db {}", err.to_string());
                 return Err(err.into())
             }
         }
@@ -66,6 +70,7 @@ impl PaymentMethodService {
 
             },
             Err(err)=>{
+                log::error!(" error getting data from db {}", err.to_string());
                 return Err(err.into())
             }
         }
@@ -94,6 +99,7 @@ impl PaymentMethodService {
 
             },
             Err(err)=>{
+                log::error!(" error updating db  {}", err.to_string());
                 return Err(err.into())
             }
         }
@@ -112,6 +118,7 @@ impl PaymentMethodService {
 
             },
             Err(err)=>{
+                log::error!(" error deleting from db {}", err.to_string());
                 return Err(err.into())
             }
         }

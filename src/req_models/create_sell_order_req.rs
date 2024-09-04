@@ -17,7 +17,7 @@ pub struct CreateSellOrderReq{
     pub wallet_address:String,
     pub password:String, 
     pub phone_number:String,
-    pub price:BigDecimal
+    // pub price:BigDecimal
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]

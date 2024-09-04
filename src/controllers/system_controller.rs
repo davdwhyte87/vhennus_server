@@ -27,6 +27,7 @@ pub async fn get_system_data(
     let data = match SystemService::get_system_data(&database.db).await{
         Ok(data)=>{data},
         Err(err)=>{
+            log::error!(" error getting system data  {}", err.to_string());
             println!("Error getting system data {}", err);
             respData.message = "Error getting system data ".to_string();
             respData.server_message = Some(err.to_string());
