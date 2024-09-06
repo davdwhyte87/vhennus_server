@@ -667,6 +667,7 @@ pub async fn cancel_buy_order(
             }
         },
         Err(err)=>{
+            log::error!("error getting buy order {}", err);
             respData.message = "Error getting data".to_string();
             respData.data = None;
             respData.server_message = Some(err.to_string());
