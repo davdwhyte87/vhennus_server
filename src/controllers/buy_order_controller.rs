@@ -684,12 +684,40 @@ pub async fn cancel_buy_order(
 
 
     // check if order is completed 
-    if buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed{
-        respData.message = "Buy Order has been completed.".to_string();
+    if buy_order.is_buyer_confirmed || buy_order.is_seller_confirmed{
+        respData.message = "Buy Order has been completed buy buyer/seller".to_string();
         respData.data = None;
         respData.server_message = None;
         return HttpResponse::BadRequest().json(respData) 
     }
+
+    // send money back to the sell order 
+    // get sell order
+    let mut sell_order = match SellOrderService::get_sell_order_by_id(&database.db, buy_order.id.to_owned()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting sell order {}", err);
+            respData.message = "Error cancelling order".to_string();
+            respData.data = None;
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData) 
+        }
+    };
+
+    // return funds to sell order 
+    sell_order.amount = sell_order.amount + buy_order.amount.to_owned();
+
+    // update sell order 
+    match SellOrderService::update(&database.db, &sell_order).await{
+       Ok(_)=>{},
+       Err(err)=>{
+        log::error!("error saving sell order {}", err);
+        respData.message = "Error saving order".to_string();
+        respData.data = None;
+        respData.server_message = Some(err.to_string());
+        return HttpResponse::BadRequest().json(respData) 
+       } 
+    };
 
     // update order
     buy_order.is_canceled = true;
@@ -698,6 +726,7 @@ pub async fn cancel_buy_order(
     match BuyOrderService::update(&database.db, &buy_order).await{
         Ok(_)=>{},
         Err(err)=>{
+            log::error!("error updating buy order {}", err);
             respData.message = "Error updating order".to_string();
             respData.data = None;
             respData.server_message = Some(err.to_string());
