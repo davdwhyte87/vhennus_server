@@ -7,7 +7,7 @@ use mongodb::bson::doc;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{controllers::buy_order_controller::escrow_to_user, models::{payment_method::PaymentMethod, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, sell_order_service::SellOrderService, system_service::SystemService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
+use crate::{controllers::buy_order_controller::escrow_to_user, models::{payment_method::PaymentMethod, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, payment_method_service::PaymentMethodService, sell_order_service::SellOrderService, system_service::SystemService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
 
 
 
@@ -180,11 +180,30 @@ pub async fn create_sell_order(
         price:system_data.price
     };
 
+    // validaate the payment method id
+    match PaymentMethodService::get_user_payment_method_by_id(&database.db,
+         new_order.payment_method_id.to_owned()).await{
+            Ok(_)=>{
+
+            }, 
+            Err(err)=>{
+                log::error!("Error getting payment method data {}", err);
+                respData.message = "Error getting payment method data ".to_string();
+                respData.server_message = Some(err.to_string());
+                respData.data =None;
+                return HttpResponse::BadRequest().json(
+                  respData
+                   
+                )  
+            }
+         }
+
     // save order
     match SellOrderService::create_sell_order(&database.db, &sell_order).await{
 
         Ok(_)=>{},
         Err(err)=>{ 
+            log::error!("Error creating sell order {}", err);
             respData.message = "Error creating ".to_string();
             respData.server_message = Some(err.to_string());
             respData.data =None;
@@ -373,12 +392,18 @@ pub async fn cancel_sell_order(
         Some(data)=>{
             for buy_order in data {
                 if !(buy_order.is_buyer_confirmed && buy_order.is_seller_confirmed) {
+                     // check if the buy order is has been cancelled
+                     if (buy_order.is_canceled){
+                        continue;
+                    }
                     respData.message = "There is still an open buy order".to_string();
                     respData.data = None;
                     respData.server_message = None;
 
                     return HttpResponse::BadRequest().json(respData) 
                 }
+
+               
             }
         },
         None=>{

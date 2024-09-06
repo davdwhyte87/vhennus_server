@@ -237,3 +237,57 @@
 2024-09-01 14:50:09 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
 2024-09-01 14:50:09 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
 2024-09-01 14:50:09 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 08:44:57 [vhennus_server] INFO vhennus_server::src/main.rs:49 - Starting server..
+2024-09-06 08:44:57 [vhennus_server] INFO vhennus_server::src/main.rs:90 - Starting server on 0.0.0.0:8000
+2024-09-06 08:44:57 [actix_server::builder] INFO actix_server::builder::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/builder.rs:272 - starting 8 workers
+2024-09-06 08:44:57 [actix_server::server] INFO actix_server::server::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/server.rs:196 - Actix runtime found; starting in Actix runtime
+2024-09-06 09:28:19 [vhennus_server::services::payment_method_service] ERROR vhennus_server::services::payment_method_service::src/services/payment_method_service.rs:73 -  error getting data from db Kind: Server selection timeout: No available servers. Topology: { Type: Unknown, Servers: [ { Address: localhost:27017, Type: Unknown, Error: Kind: I/O error: Connection refused (os error 111), labels: {} } ] }, labels: {}
+2024-09-06 09:28:19 [vhennus_server::controllers::payment_method_controller] ERROR vhennus_server::controllers::payment_method_controller::src/controllers/payment_method_controller.rs:151 -  error  gettting user payment mthods Kind: Server selection timeout: No available servers. Topology: { Type: Unknown, Servers: [ { Address: localhost:27017, Type: Unknown, Error: Kind: I/O error: Connection refused (os error 111), labels: {} } ] }, labels: {}
+2024-09-06 09:29:06 [vhennus_server::services::payment_method_service] ERROR vhennus_server::services::payment_method_service::src/services/payment_method_service.rs:73 -  error getting data from db Kind: Server selection timeout: No available servers. Topology: { Type: Unknown, Servers: [ { Address: localhost:27017, Type: Unknown, Error: Kind: I/O error: Connection refused (os error 111), labels: {} } ] }, labels: {}
+2024-09-06 09:29:06 [vhennus_server::controllers::payment_method_controller] ERROR vhennus_server::controllers::payment_method_controller::src/controllers/payment_method_controller.rs:151 -  error  gettting user payment mthods Kind: Server selection timeout: No available servers. Topology: { Type: Unknown, Servers: [ { Address: localhost:27017, Type: Unknown, Error: Kind: I/O error: Connection refused (os error 111), labels: {} } ] }, labels: {}
+2024-09-06 10:07:21 [vhennus_server] INFO vhennus_server::src/main.rs:49 - Starting server..
+2024-09-06 10:07:21 [vhennus_server] INFO vhennus_server::src/main.rs:90 - Starting server on 0.0.0.0:8000
+2024-09-06 10:07:21 [actix_server::builder] INFO actix_server::builder::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/builder.rs:272 - starting 8 workers
+2024-09-06 10:07:21 [actix_server::server] INFO actix_server::server::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/server.rs:196 - Actix runtime found; starting in Actix runtime
+2024-09-06 10:30:26 [actix_server::server] INFO actix_server::server::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/server.rs:319 - SIGINT received; starting forced shutdown
+2024-09-06 10:30:26 [actix_server::accept] INFO actix_server::accept::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/accept.rs:143 - accept thread stopped
+2024-09-06 10:30:26 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:30:26 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:30:26 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:30:26 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:30:26 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:30:26 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:30:26 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:30:26 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:30:28 [vhennus_server] INFO vhennus_server::src/main.rs:49 - Starting server..
+2024-09-06 10:30:28 [vhennus_server] INFO vhennus_server::src/main.rs:90 - Starting server on 0.0.0.0:8000/payment_method/my_payment_methods
+2024-09-06 10:30:46 [vhennus_server] INFO vhennus_server::src/main.rs:49 - Starting server..
+2024-09-06 10:30:47 [vhennus_server] INFO vhennus_server::src/main.rs:90 - Starting server on 0.0.0.0:8000/payment_method/my_payment_methods
+2024-09-06 10:32:01 [vhennus_server] INFO vhennus_server::src/main.rs:49 - Starting server..
+2024-09-06 10:32:01 [vhennus_server] INFO vhennus_server::src/main.rs:90 - Starting server on 0.0.0.0:8000
+2024-09-06 10:32:01 [actix_server::builder] INFO actix_server::builder::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/builder.rs:272 - starting 8 workers
+2024-09-06 10:32:01 [actix_server::server] INFO actix_server::server::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/server.rs:196 - Actix runtime found; starting in Actix runtime
+2024-09-06 10:33:37 [actix_server::server] INFO actix_server::server::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/server.rs:319 - SIGINT received; starting forced shutdown
+2024-09-06 10:33:37 [actix_server::accept] INFO actix_server::accept::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/accept.rs:143 - accept thread stopped
+2024-09-06 10:33:37 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:33:38 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:33:38 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:33:38 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:33:38 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:33:38 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:33:38 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:33:38 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 10:33:44 [vhennus_server] INFO vhennus_server::src/main.rs:49 - Starting server..
+2024-09-06 10:33:45 [vhennus_server] INFO vhennus_server::src/main.rs:90 - Starting server on 0.0.0.0:8000
+2024-09-06 10:33:45 [actix_server::builder] INFO actix_server::builder::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/builder.rs:272 - starting 8 workers
+2024-09-06 10:33:45 [actix_server::server] INFO actix_server::server::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/server.rs:196 - Actix runtime found; starting in Actix runtime
+2024-09-06 13:42:20 [actix_server::server] INFO actix_server::server::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/server.rs:319 - SIGINT received; starting forced shutdown
+2024-09-06 13:42:20 [actix_server::accept] INFO actix_server::accept::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/accept.rs:143 - accept thread stopped
+2024-09-06 13:42:20 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 13:42:20 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 13:42:20 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 13:42:20 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 13:42:20 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 13:42:20 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 13:42:20 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-09-06 13:42:20 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker

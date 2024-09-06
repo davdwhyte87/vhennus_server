@@ -53,7 +53,7 @@ impl MongoService{
         db_name = "vhennus_test".to_owned()
     }
     if app_env == "local"{
-        db_name = "vhennus_local".to_owned()
+        db_name = "vhennus_test".to_owned()
     }
     if app_env == "prod" {
         db_name = "vhennus".to_owned()
