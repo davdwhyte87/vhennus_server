@@ -145,6 +145,8 @@ async fn main() -> std::io::Result<()> {
                         .service(post_controller::create_post)
                         .service(post_controller::create_comment)
                         .service(post_controller::get_all_posts)
+                        .service(post_controller::get_single_posts)
+                        .service(post_controller::like_post)
                     )
             )
             .service(user_controller::create_user)
