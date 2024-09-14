@@ -7,7 +7,7 @@ use actix_web::web::{resource, route, service, Data, JsonConfig};
 mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
 use controllers::{
-    buy_order_controller, order_message_controller, payment_method_controller, post_controller, sell_order_controller, user_controller, wallet_controller
+    buy_order_controller, order_message_controller, payment_method_controller, post_controller, sell_order_controller, system_controller, user_controller, wallet_controller
 
 };
 mod models;
@@ -30,15 +30,15 @@ mod middlewares;
 
 
 
-#[get("/")]
+#[get("/hello")]
 async fn index() -> impl Responder {
     "Hello, Bread!"
 }
 
-#[get("/{name}")]
-async fn hello(name: web::Path<String>) -> impl Responder {
-    format!("Hello {}!", &name)
-}
+// #[get("/{name}")]
+// async fn hello(name: web::Path<String>) -> impl Responder {
+//     format!("Hello {}!", &name)
+// }
 
 
 
@@ -152,7 +152,8 @@ async fn main() -> std::io::Result<()> {
             .service(user_controller::kura_id_signup)
             .service(user_controller::kura_id_login)
             .service(user_controller::get_code)
-            .service(hello)
+            .service(index)
+            .service(system_controller::get_system_data)
             
 
             //

@@ -10,12 +10,10 @@ use crate::{models::{payment_method::{PaymentMethod, PaymentMethodData}, respons
 
 
 
-#[post("/get_system_data")]
+#[get("/get_system_data")]
 pub async fn get_system_data(
 
-    database:Data<MongoService>,
-    req:Json<CreatePaymentMethodReq>,
-    claim:Option<ReqData<Claims>>
+    database:Data<MongoService>
 )->HttpResponse{
     let mut respData = GenericResp::<System>{
         message:"".to_string(),

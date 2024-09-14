@@ -694,7 +694,7 @@ pub async fn cancel_buy_order(
 
     // send money back to the sell order 
     // get sell order
-    let mut sell_order = match SellOrderService::get_sell_order_by_id(&database.db, buy_order.id.to_owned()).await{
+    let mut sell_order = match SellOrderService::get_sell_order_by_id(&database.db, buy_order.sell_order_id.to_owned()).await{
         Ok(data)=>{data},
         Err(err)=>{
             log::error!("error getting sell order {}", err);
