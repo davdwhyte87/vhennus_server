@@ -67,7 +67,8 @@ impl PostService {
         };
         // update post
         post.comments_ids.push(comment.id.to_owned());
-        match post_collection.update_one(doc! {"id": comment.id.to_owned()},doc! {"$set":doc! {
+        match post_collection.update_one(doc! {"id": comment.post_id.to_owned()},
+        doc! {"$set":doc! {
             "comments_ids":post.comments_ids.to_owned()
         }}).await{
             Ok(data)=>{},
@@ -99,6 +100,55 @@ impl PostService {
            posts.push(data);
        }
        return Ok(posts);
+    }
+
+    pub async fn get_single_post(db:&Database, id:String)->Result<Post, Box<dyn Error>>{
+        let collection = db.collection::<Post>(POST_SERVICE_COLLECTION);
+        let lookup_2 = doc! {
+            "$lookup":
+               {
+                  "from": "Comment",
+                  "localField": "comments_ids",
+                  "foreignField": "id",
+                  "as": "comments"
+               }
+        };
+
+        let filter = doc! {"$match":doc! {"id":id}};
+
+       let mut results = collection.aggregate(vec![filter,lookup_2]).await?;
+       let mut post:Post = Post::default();
+       while let Some(result) = results.next().await{
+           let data: Post= from_document(result?)?;
+           post = data
+       }
+       return Ok(post);
+    }
+
+    pub async fn update_post(db:&Database, post:Post)->Result<(), Box<dyn Error>>{
+        let collection = db.collection::<Post>(POST_SERVICE_COLLECTION);
+        let update_doc = doc! {
+            "$set":
+               doc!{
+                  "likes": post.likes.to_owned(),
+               }
+        };
+
+        let filter = doc! {"id":post.id};
+
+       let mut results = collection.update_one(filter,update_doc).await;
+       match results {
+           Ok(_)=>{
+
+           },
+           Err(err)=>{
+            log::error!(" error updating post {}", err.to_string());
+            return Err(err.into());
+           }
+       }
+       
+      
+       return Ok(());
     }
 
 

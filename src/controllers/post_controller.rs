@@ -65,12 +65,13 @@ pub async fn create_post(
         image: "".to_string(),
         created_at: chrono::offset::Utc::now().to_string(),
         user_name:claim.user_name.to_owned(),
-        number_of_likes : 50,
+        likes : vec![],
         comments_ids: vec![],
         comments: None,
         number_of_views: 100
 
     };
+
 
     match PostService::create_post(&database.db, &new_post).await {
         Ok(_)=>{},
@@ -140,7 +141,7 @@ struct GetSinglePostPath {
     id: String,
 }
 
-#[post("/{id}/comment/create/")]
+#[post("/{id}/comment/create")]
 pub async fn create_comment(
     database:Data<MongoService>,
     req:Json<CreateCommentReq>,
@@ -193,6 +194,115 @@ pub async fn create_comment(
     respData.data = Some(new_comment);
     return HttpResponse::Ok().json( respData);
 }
+
+
+#[get("/single/{id}")]
+pub async fn get_single_posts(
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>,
+    path:web::Path<GetSinglePostPath>
+)->HttpResponse{
+
+    let mut respData = GenericResp::<Post>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+    println!("new req");
+
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    let posts = match PostService::get_single_post(&database.db, path.id.to_owned()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!(" error getting post {}", err.to_string());
+            respData.message = "Error getting post".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json( respData);
+        }
+    };
+
+    respData.message = "".to_string();
+    respData.server_message = None;
+    respData.data = Some(posts);
+    return HttpResponse::Ok().json( respData);
+    
+}
+
+
+#[get("/like/{id}")]
+pub async fn like_post(
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>,
+    path:web::Path<GetSinglePostPath>
+)->HttpResponse{
+    let mut respData = GenericResp::<Post>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    // get post 
+    let mut post = match PostService::get_single_post(&database.db, path.id.to_owned()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting post {}", err.to_string());
+            respData.message = "Post not found".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::NotFound().json( respData); 
+        }
+    };
+
+    if !post.likes.contains(&claim.user_name){
+        post.likes.push(claim.user_name.to_owned());
+    }else{
+        post.likes.retain(|x| x!=&claim.user_name)
+    }
+    
+
+    match PostService::update_post(&database.db, post).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            log::error!("error updating post {}", err.to_string());
+            respData.message = "Error saving data".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::NotFound().json( respData); 
+        }
+    };
+
+    respData.message = "OK".to_string();
+    respData.server_message = None;
+    respData.data = None;
+    return HttpResponse::Ok().json( respData);
+}
+
+
+
 
 #[derive(Debug, Serialize)]
 struct ApiError {

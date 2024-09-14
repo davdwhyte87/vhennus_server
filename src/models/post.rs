@@ -17,7 +17,7 @@ pub struct Post {
     pub image: String, 
     pub created_at:String,
     pub user_name:String, 
-    pub number_of_likes:i32, 
+    pub likes:Vec<String>, //usernames of people who liked 
     pub comments_ids: Vec<String>,
     pub comments: Option<Vec<Comment>>,
     pub number_of_views:i32
