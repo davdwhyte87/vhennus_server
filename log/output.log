@@ -437,3 +437,48 @@
 2024-09-14 13:43:47 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
 2024-09-14 13:43:47 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
 2024-09-14 13:43:47 [actix_server::worker] INFO actix_server::worker::/home/david/.cargo/registry/src/index.crates.io-6f17d22bba15001f/actix-server-2.4.0/src/worker.rs:595 - shutting down idle worker
+2024-10-07 15:52:14 [vhennus_server] INFO vhennus_server::src/main.rs:49 - Starting server..
+2024-10-07 15:52:15 [vhennus_server] INFO vhennus_server::src/main.rs:90 - Starting server on 0.0.0.0:8000
+2024-10-07 15:52:15 [actix_server::builder] INFO actix_server::builder::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\builder.rs:272 - starting 8 workers
+2024-10-07 15:52:15 [actix_server::server] INFO actix_server::server::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\server.rs:196 - Actix runtime found; starting in Actix runtime
+2024-10-07 15:53:39 [actix_server::server] INFO actix_server::server::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\server.rs:319 - SIGINT received; starting forced shutdown
+2024-10-07 15:53:39 [actix_server::accept] INFO actix_server::accept::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\accept.rs:143 - accept thread stopped
+2024-10-07 15:53:39 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-07 15:53:39 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-07 15:53:39 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-07 15:53:39 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-07 15:53:39 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-07 15:53:39 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-07 15:53:39 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-07 15:53:39 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 04:41:32 [vhennus_server] INFO vhennus_server::src/main.rs:50 - Starting server..
+2024-10-10 04:41:33 [vhennus_server] INFO vhennus_server::src/main.rs:91 - Starting server on 0.0.0.0:8000
+2024-10-10 04:41:33 [actix_server::builder] INFO actix_server::builder::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\builder.rs:272 - starting 8 workers
+2024-10-10 04:41:33 [actix_server::server] INFO actix_server::server::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\server.rs:196 - Actix runtime found; starting in Actix runtime
+2024-10-10 04:44:44 [vhennus_server::services::trivia_game_service] ERROR vhennus_server::services::trivia_game_service::src\services\trivia_game_service.rs:177 -  error getting todays question  No question available
+2024-10-10 04:44:44 [vhennus_server::controllers::trivia_game_controller] ERROR vhennus_server::controllers::trivia_game_controller::src\controllers\trivia_game_controller.rs:25 -  error getting trivia game  No question available
+2024-10-10 05:13:51 [actix_server::server] INFO actix_server::server::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\server.rs:319 - SIGINT received; starting forced shutdown
+2024-10-10 05:13:51 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:13:51 [actix_server::accept] INFO actix_server::accept::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\accept.rs:143 - accept thread stopped
+2024-10-10 05:13:51 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:13:51 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:13:51 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:13:51 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:13:51 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:13:51 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:13:51 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:14:10 [vhennus_server] INFO vhennus_server::src/main.rs:50 - Starting server..
+2024-10-10 05:14:11 [vhennus_server] INFO vhennus_server::src/main.rs:91 - Starting server on 0.0.0.0:8000
+2024-10-10 05:14:11 [actix_server::builder] INFO actix_server::builder::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\builder.rs:272 - starting 8 workers
+2024-10-10 05:14:11 [actix_server::server] INFO actix_server::server::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\server.rs:196 - Actix runtime found; starting in Actix runtime
+2024-10-10 05:14:21 [vhennus_server::services::trivia_game_service] ERROR vhennus_server::services::trivia_game_service::src\services\trivia_game_service.rs:153 -  error converting document to struct  invalid type: map, expected a string
+2024-10-10 05:15:40 [actix_server::server] INFO actix_server::server::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\server.rs:319 - SIGINT received; starting forced shutdown
+2024-10-10 05:15:40 [actix_server::accept] INFO actix_server::accept::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\accept.rs:143 - accept thread stopped
+2024-10-10 05:15:40 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:15:40 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:15:40 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:15:40 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:15:40 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:15:40 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:15:40 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker
+2024-10-10 05:15:40 [actix_server::worker] INFO actix_server::worker::C:\Users\David\.cargo\registry\src\index.crates.io-6f17d22bba15001f\actix-server-2.4.0\src\worker.rs:595 - shutting down idle worker

@@ -6,6 +6,7 @@ use actix_web::web::{resource, route, service, Data, JsonConfig};
 
 mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
+use controllers::trivia_game_controller::{self, get_todays_game};
 use controllers::{
     buy_order_controller, order_message_controller, payment_method_controller, post_controller, sell_order_controller, system_controller, user_controller, wallet_controller
 
@@ -147,6 +148,11 @@ async fn main() -> std::io::Result<()> {
                         .service(post_controller::get_all_posts)
                         .service(post_controller::get_single_posts)
                         .service(post_controller::like_post)
+                    )
+
+                    .service(
+                        web::scope("trivia")
+                        .service(trivia_game_controller::get_todays_game)  
                     )
             )
             .service(user_controller::create_user)

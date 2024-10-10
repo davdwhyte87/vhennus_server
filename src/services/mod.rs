@@ -17,3 +17,4 @@ pub mod tcp;
 
 pub mod post_service;
 pub mod system_service;
+pub mod trivia_game_service;
