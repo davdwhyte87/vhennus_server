@@ -4,7 +4,7 @@ use std::{error::Error, os::windows::raw::SOCKET, vec};
 
 use chrono::Datelike;
 use futures::{StreamExt, TryStreamExt};
-use mongodb::{bson::{doc, from_document, Document}, results::InsertOneResult, Database};
+use mongodb::{bson::{doc, from_document, oid::ObjectId, Document}, results::InsertOneResult, Database};
 
 use crate::{main, models::{buy_order::BuyOrder, message::OrderMessage, sell_order::SellOrder, trivia_game::TriviaGame, trivia_question::TriviaQuestion}};
 
@@ -117,16 +117,25 @@ impl TriviaGameService {
         // get toddays date 
         let dateb = chrono::Utc::now();
 
-        let todays_date = format!("{}/{}/{}", dateb.month(), dateb.month(), dateb.year());
+        let todays_date = format!("{}/{}/{}", dateb.month(), dateb.day(), dateb.year());
         
         let filter = doc! {"date":todays_date.to_owned()};
         let pipeline = vec![
+            doc! {
+                "$match":filter
+            },
             doc! {
                 "$lookup":{
                     "from": "TriviaQuestion",
                     "localField":"trivia_question_id",
                     "foreignField":"id",
                     "as":"trivia_question"
+                }
+            },
+            doc! {
+                "$unwind": {
+                    "path": "$trivia_question",
+                    "preserveNullAndEmptyArrays": true
                 }
             }
         ];
@@ -145,17 +154,22 @@ impl TriviaGameService {
         while let Some(games_data)= result.next().await{
             match games_data {
                 Ok(data)=>{
+                    log::debug!("data {}", data);
                     match from_document::<TriviaGame>(data){
+
                         Ok(data)=>{
+
                             games_.push(data);
                         },
                         Err(err)=>{
                             log::error!(" error converting document to struct  {}", err.to_string());
+                            return Err(err.into());
                         }
                     }
                 },
                 Err(err)=>{
-                    log::error!(" error getting document from cursor {}", err.to_string());   
+                    log::error!(" error getting document from cursor {}", err.to_string());
+                    return Err(err.into());   
                 }
             }
         }
@@ -180,6 +194,7 @@ impl TriviaGameService {
                 };
 
                 let ngame = TriviaGame{
+                    mongo_id:ObjectId::new(),
                     id: uuid::Uuid::new_v4().to_string(),
                     trivia_question_id: question.id.to_owned(),
                     winner_user_name: None,

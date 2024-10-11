@@ -10,6 +10,8 @@ use super::{buy_order::BuyOrder, payment_method::{PaymentMethod, PaymentMethodDa
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct TriviaQuestion {
+    #[serde(rename = "_id")]
+    pub mongo_id:ObjectId,
     pub id: String,
     pub question: String,
     pub options: Vec<String>, 
