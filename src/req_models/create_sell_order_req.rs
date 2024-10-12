@@ -49,3 +49,9 @@ pub struct CreateBuyOrderReq{
     pub sell_order_id: String,
     pub wallet_address:String
 }
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct AnswerGame{
+    pub answer:String,
+    pub wallet_address:String
+}

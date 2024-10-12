@@ -4,7 +4,7 @@ use std::{error::Error, os::windows::raw::SOCKET, vec};
 
 use chrono::Datelike;
 use futures::{StreamExt, TryStreamExt};
-use mongodb::{bson::{doc, from_document, oid::ObjectId, Document}, results::InsertOneResult, Database};
+use mongodb::{bson::{doc, from_document, oid::ObjectId, Document}, results::{InsertOneResult, UpdateResult}, Database};
 
 use crate::{main, models::{buy_order::BuyOrder, message::OrderMessage, sell_order::SellOrder, trivia_game::TriviaGame, trivia_question::TriviaQuestion}};
 
@@ -44,6 +44,28 @@ impl TriviaGameService {
             Ok(data)=>{data},
             Err(err)=>{
                 log::error!(" error inserting into db  {}", err.to_string());
+                return Err(err.into())
+            }
+        };
+        Ok(data)
+    }
+
+
+    pub async fn update_game(db:&Database,id:String, game:&TriviaGame)->Result<UpdateResult, Box<dyn Error>>{
+        // Get a handle to a collection in the database.
+        let collection = db.collection::<TriviaGame>(TRIVIA_GAME_COLLECTION);
+
+        let query = doc! {"id":id };
+        let update_data = doc! {"$set": doc! {
+            "winner_user_name":game.winner_user_name.to_owned(),
+            "is_ended":game.is_ended.to_owned()
+        }};
+        let result =collection.update_one(query, update_data).await;
+
+        let data = match result {
+            Ok(data)=>{data},
+            Err(err)=>{
+                log::error!(" error updating db  {}", err.to_string());
                 return Err(err.into())
             }
         };

@@ -14,5 +14,6 @@ use super::{buy_order::BuyOrder, comment::Comment, payment_method::{PaymentMetho
 pub struct System {
     pub id: String,
     pub price: BigDecimal,
-    pub android_app_version:String
+    pub android_app_version:String,
+    pub trivia_win_amount:BigDecimal
 }

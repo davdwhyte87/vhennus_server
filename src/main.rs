@@ -153,6 +153,7 @@ async fn main() -> std::io::Result<()> {
                     .service(
                         web::scope("trivia")
                         .service(trivia_game_controller::get_todays_game)  
+                        .service(trivia_game_controller::play_game)
                     )
             )
             .service(user_controller::create_user)
