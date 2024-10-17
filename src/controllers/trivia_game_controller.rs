@@ -111,7 +111,7 @@ pub async fn play_game(
                     PlayTriviaError::CorrectButLate=>{
                         respData.message = "Correct, but somebody beat you to it. Try again next time".to_string();
                         respData.server_message = Some(err.to_string());
-                        respData.data = Some("0".to_string());
+                        respData.data = Some("CSW".to_string());
                         return HttpResponse::Ok().json(respData)
                     }
                     PlayTriviaError::OperationFailed=>{
@@ -129,7 +129,7 @@ pub async fn play_game(
                     PlayTriviaError::WrongAnswer=>{
                         respData.message = "Wrong answer".to_string();
                         respData.server_message = Some(err.to_string());
-                        respData.data = Some("0".to_string());
+                        respData.data = Some("W".to_string());
                         return HttpResponse::Ok().json(respData)
                     }
                 }
@@ -139,7 +139,7 @@ pub async fn play_game(
 
     respData.message = "Congratulations you win".to_string();
     respData.server_message = None;
-    respData.data = Some("1".to_string());
+    respData.data = Some("C".to_string());
     return HttpResponse::Ok().json(respData)
 
 }
