@@ -19,3 +19,5 @@ pub mod post;
 pub mod comment;
 pub mod price;
 pub mod system;
+pub mod trivia_question;
+pub mod trivia_game;

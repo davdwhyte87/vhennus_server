@@ -27,3 +27,4 @@ Seller can:
 - confirm sell order
 - cancel sell order 
 
+when the first person requests for a new game, the server gets todays question and creates the game Subsequest users will get todays game. and answer. 

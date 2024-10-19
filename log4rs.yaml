@@ -22,7 +22,7 @@ appenders:
       pattern: "{d(%Y-%m-%d %H:%M:%S)} [{t}] {l} {M}::{f}:{L} - {m}{n}"
    
 root:
-  level: info
+  level: debug
   appenders:
     - rolling_file
     - console_appender
