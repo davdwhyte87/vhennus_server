@@ -4,6 +4,47 @@ use actix_web::{ get, post, web::{self, Data, ReqData}, HttpResponse, ResponseEr
 use crate::{models::{profile::Profile, response::GenericResp}, req_models::{create_sell_order_req::CreatePostReq, requests::UpdateProfileReq}, services::{mongo_service::MongoService, profile_service::ProfileService}, utils::auth::Claims};
 
 
+#[get("/get_friends")]
+pub async fn get_friends(
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+    let mut respData = GenericResp::<Profile>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: Some(Profile::default())
+    };
+
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    // get by username
+    let profile = match ProfileService::get_friends(&database.db, claim.user_name.clone()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            respData.message = "Error getting user profile".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
+    respData.data = Some(profile);
+    return HttpResponse::Ok().json(respData)
+}
+
+
 #[get("/get")]
 pub async fn get_profile(
     database:Data<MongoService>,
@@ -124,5 +165,7 @@ pub async fn update_profile(
     };
     return HttpResponse::Ok().json({});
 }
+
+
 
 

@@ -15,6 +15,51 @@ pub struct  ProfileService{
 }
 
 impl ProfileService {
+    pub async fn get_friends(db:&Database, user_name:String)->Result<Profile, Box<dyn Error>>{
+        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
+        let lookup_3 = doc! {
+            "$lookup":
+               {
+                  "from": "Profile",
+                  "localField": "friends",
+                  "foreignField": "user_name",
+                  "as": "friends_models"
+               }
+        };
+
+        let match_ = doc! {
+            "$match":{
+                "user_name": user_name
+            }
+        };
+
+        let pipeline = vec![match_, lookup_3];
+        let mut res = match collection.aggregate(pipeline).await{
+            Ok(data)=>{data},
+            Err(err)=>{
+                log::error!(" error fetching profile data  {}", err.to_string());
+                return Err(err.into())   
+            }
+        };
+
+        if let Some(data) = res.next().await{
+            match data {
+                Ok(datax)=>{
+                    // decode document 
+                    let profile:Profile = from_document(datax)?;
+                    return Ok(profile)
+                },
+                Err(err)=>{
+                    log::error!(" error fetching profile data  {}", err.to_string());
+                    return Err(err.into())    
+                }
+            }
+        }else{
+            return Err(Box::from("Error getting data")) ;
+        }
+
+     
+    }
 
     pub async fn get_profile(db:&Database, user_name:String)->Result<Profile, Box<dyn Error>>{
         // Get a handle to a collection in the database.

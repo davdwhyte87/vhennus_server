@@ -8,16 +8,19 @@ use handlebars::Handlebars;
 use mongodb::bson::doc;
 use rand::Rng;
 use regex::Replacer;
+use serde::Deserialize;
 use validator::Validate;
 use crate::database::db::db::DB;
+use crate::models::fried_request::{FriendRequest, FriendRequestStatus};
 use crate::models::helper::EmailData;
 use crate::models::power_up::{PlayerPowerUp, PowerUpType};
-use crate::models::request_models::{CreateKuracoinID, GetCodeReq, LoginReq};
+use crate::models::request_models::{CreateKuracoinID, GetCodeReq, LoginReq, SendFriendReq};
 use crate::models::response::{CodeResp, GenericResp, LoginResp, PlayerRunInfoRes, Response};
 use crate::models::run_info::RunInfo;
 use crate::models::user::{User, UserType};
 use crate::models::wallet::Wallet;
 use crate::req_models::create_user_req::CreateUserReq;
+use crate::services::friend_request_service::FriendRequestService;
 use crate::services::mongo_service::MongoService;
 
 use crate::services::tcp::{self, send_to_tcp_server};
@@ -572,4 +575,204 @@ pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKur
     respData.server_message =None;
     respData.data = Some(req_data.user_name.to_owned());
     return HttpResponse::Ok().json(respData);
+}
+
+#[post("/friend_request/send")]
+pub async fn send_friend_request(
+    database:Data<MongoService>,
+     req: Result<web::Json<SendFriendReq>, actix_web::Error>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+    let mut respData = GenericResp::<FriendRequest>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: Some(FriendRequest::default())
+    };
+    let req = match req {
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("validation  error  {}", err.to_string());
+            respData.message = "Validation error".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json( respData); 
+        }
+    };
+
+    match UserService::get_by_(&database.db, doc! {"user_name":req.user_name.clone()}).await{
+        Ok(data)=>{
+            match data {
+                Some(_)=>{},
+                None=>{
+                    respData.message = "User not found".to_string();
+                    respData.server_message =None;
+                    respData.data = None;
+                    return HttpResponse::BadRequest().json(respData);   
+                }
+            }
+        },
+        Err(err)=>{
+            respData.message = "Error getting username".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+
+            return HttpResponse::BadRequest().json(respData);
+        }
+    }
+
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    let friend_request = FriendRequest{
+        id: uuid::Uuid::new_v4().to_string(),
+        user_name: req.user_name.clone(),
+        requester:claim.user_name.clone(),
+        status:FriendRequestStatus::PENDING,
+        created_at:chrono::offset::Utc::now().to_string(),
+        updated_at:chrono::offset::Utc::now().to_string()
+    };
+
+    match FriendRequestService::create_friend_request(&database.db, friend_request).await{
+        Ok(data)=>{data}, 
+        Err(err)=>{
+            respData.message = "Error creating friend request".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
+
+
+    return HttpResponse::Ok().json({});
+
+}
+
+
+#[derive(Debug, Deserialize)]
+struct GenID{id:String} 
+#[get("/friend_request/accept/{id}")]
+pub async fn accept_friend_request(
+    database:Data<MongoService>,
+    path: web::Path<GenID>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+    let mut respData = GenericResp::<FriendRequest>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: Some(FriendRequest::default())
+    };
+
+    // get friend request 
+    let fr = match FriendRequestService::get_single_friend_request(&database.db, path.id.clone()).await{
+        Ok(data)=>{
+            match data{
+                Some(data)=>{data},
+                None=>{
+                    respData.message = "Error finding request".to_string();
+                    respData.server_message = None;
+                    respData.data = None;
+                    return HttpResponse::BadRequest().json(respData);   
+                }
+            }
+        },
+        Err(err)=>{
+            respData.message = "Error accepting friend request".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
+
+
+    
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    // check if the req owner owns the friend request
+    if fr.user_name != claim.user_name.clone(){
+        respData.message = "you cannot accept this request".to_string();
+        respData.server_message = None;
+        respData.data = None;
+
+        return HttpResponse::BadRequest().json(respData);
+    }
+ 
+    match FriendRequestService::accept_friend_request(&database.db, fr).await{
+        Ok(data)=>{data}, 
+        Err(err)=>{
+            respData.message = "Error accepting friend request".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
+
+
+    return HttpResponse::Ok().json({});
+
+}
+
+
+
+#[get("/friend_requests")]
+pub async fn get_my_friend_request(
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+    let mut respData = GenericResp::<Vec<FriendRequest>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: Some(vec![FriendRequest::default()])
+    };
+
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    // get friend request 
+    let fr = match FriendRequestService::get_user_friend_request(&database.db, claim.user_name.clone()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            respData.message = "Error getting friend request".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
+    respData.data = Some(fr);
+
+    return HttpResponse::Ok().json(respData);
+
 }

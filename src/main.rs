@@ -15,7 +15,7 @@ mod models;
 use dotenv::dotenv;
 use get_if_addrs::get_if_addrs;
 use log::{info, error, debug};
-use models::{response};
+use models::{response, user};
 mod database;
 use database::db::db;
 mod services;
@@ -159,6 +159,13 @@ async fn main() -> std::io::Result<()> {
                         web::scope("profile")
                         .service(profile_controller::update_profile)
                         .service(profile_controller::get_profile)
+                        .service(profile_controller::get_friends)
+                    )
+                    .service(
+                        web::scope("user")
+                        .service(user_controller::accept_friend_request)
+                        .service(user_controller::send_friend_request)
+                        .service(user_controller::get_my_friend_request)
                     )
             )
             .service(user_controller::create_user)

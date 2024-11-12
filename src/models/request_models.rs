@@ -27,6 +27,12 @@ pub struct  UpdateDiagnosisReq{
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  SendFriendReq{
+    pub user_name: String,
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  LoginReq{
     #[validate(email)]
     pub email:String,
