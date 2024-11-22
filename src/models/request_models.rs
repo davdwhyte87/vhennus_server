@@ -93,6 +93,25 @@ pub struct  CreateAccountDetailsReq{
     pub bank_name: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  CreateChatReq{
+
+    pub pair_id: String,
+
+    pub receiver: String,
+
+    pub message: Option<String>,
+    pub image:Option<String>
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  CreateGroupChatReq{
+    pub name: String,
+    pub display_name:String,
+    pub members: Vec<String>,
+    pub image:String
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  BuyCoinReq{

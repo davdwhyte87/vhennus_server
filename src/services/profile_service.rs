@@ -1,7 +1,7 @@
 
-use std::error::Error;
+use std::{error::Error, vec};
 
-use futures::{future::OkInto, StreamExt};
+use futures::{future::OkInto, StreamExt, TryStreamExt};
 use mongodb::{bson::{doc, from_document}, results::{InsertOneResult, UpdateResult}, Database};
 use r2d2_mongodb::mongodb::coll;
 
@@ -59,6 +59,26 @@ impl ProfileService {
         }
 
      
+    }
+
+
+    pub async fn search(db:&Database, data:String)->Result<Vec<Profile>, Box<dyn Error>>{
+        let filter =  doc! { "user_name": { "$regex": data, "$options": "i" } };
+        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
+
+        let mut cursor = match collection.find(filter).await{
+            Ok(data)=>{data},
+            Err(err)=>{
+                log::error!(" error fetching profile data  {}", err.to_string());
+                return Err(err.into())   
+            }
+        };
+        let mut profiles:Vec<Profile> = vec![];
+        while  let Some(data) = cursor.try_next().await? {  
+            profiles.push(data);
+        }
+
+        Ok(profiles)
     }
 
     pub async fn get_profile(db:&Database, user_name:String)->Result<Profile, Box<dyn Error>>{

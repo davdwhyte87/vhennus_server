@@ -20,3 +20,5 @@ pub mod system_service;
 pub mod trivia_game_service;
 pub mod profile_service;
 pub mod friend_request_service;
+pub mod chat_service;
+pub mod circle_service;

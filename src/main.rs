@@ -8,7 +8,7 @@ mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
 use controllers::trivia_game_controller::{self, get_todays_game};
 use controllers::{
-    buy_order_controller, order_message_controller, payment_method_controller, post_controller, profile_controller, sell_order_controller, system_controller, user_controller, wallet_controller
+    buy_order_controller, chats_controller, order_message_controller, payment_method_controller, post_controller, profile_controller, sell_order_controller, system_controller, user_controller, wallet_controller
 
 };
 mod models;
@@ -160,12 +160,24 @@ async fn main() -> std::io::Result<()> {
                         .service(profile_controller::update_profile)
                         .service(profile_controller::get_profile)
                         .service(profile_controller::get_friends)
+                        .service(profile_controller::search)
                     )
                     .service(
                         web::scope("user")
                         .service(user_controller::accept_friend_request)
                         .service(user_controller::send_friend_request)
                         .service(user_controller::get_my_friend_request)
+                    )
+                    .service(
+                        web::scope("chat")
+                        .service(chats_controller::create_chat)
+                        .service(chats_controller::get_by_pair)
+                    )
+                    .service(
+                        web::scope("circle")
+                        .service(chats_controller::create_group_chat)
+                        .service(chats_controller::get_circle)
+                        .service(chats_controller::get_group_chats)
                     )
             )
             .service(user_controller::create_user)

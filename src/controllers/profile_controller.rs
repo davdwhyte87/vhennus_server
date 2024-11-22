@@ -1,5 +1,6 @@
 
 use actix_web::{ get, post, web::{self, Data, ReqData}, HttpResponse, ResponseError};
+use serde::Deserialize;
 
 use crate::{models::{profile::Profile, response::GenericResp}, req_models::{create_sell_order_req::CreatePostReq, requests::UpdateProfileReq}, services::{mongo_service::MongoService, profile_service::ProfileService}, utils::auth::Claims};
 
@@ -84,6 +85,55 @@ pub async fn get_profile(
     respData.data = Some(profile);
     return HttpResponse::Ok().json(respData)
 }
+
+
+
+#[derive(Deserialize)]
+struct SearchPath{
+    pub data:String
+}
+
+#[get("/search/{data}")]
+pub async fn search(
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>,
+    path: web::Path<SearchPath>
+)->HttpResponse{
+    let mut respData = GenericResp::<Vec<Profile>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    // get by username
+    let profile = match ProfileService::search(&database.db, path.data.clone()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            respData.message = "Error getting search result".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
+    respData.data = Some(profile);
+    return HttpResponse::Ok().json(respData)
+}
+
 
 #[post("/update")]
 pub async fn update_profile(

@@ -19,7 +19,7 @@ use crate::models::request_models::LoginReq;
 use crate::models::user::User;
 use crate::utils::send_email::{ACTIVATE_EMAIL, get_body, send_email};
 
-const COLLECTION_NAME:&str = "User";
+pub const USER_COLLECTION:&str = "User";
 
 pub struct UserService{
     client: Client
@@ -29,7 +29,7 @@ pub struct UserService{
 impl UserService{
     pub async fn create_user(db:&Database, user:&User)->Result<InsertOneResult, Box<dyn Error>>{
         // Get a handle to a collection in the database.
-        let collection = db.collection::<User>(COLLECTION_NAME);
+        let collection = db.collection::<User>(USER_COLLECTION);
 
         // let new_user = User{
         //     id:None,
@@ -71,7 +71,7 @@ impl UserService{
     pub async fn get_by_id(db:&Database, id:String)->Result<Option<User>, Box<dyn Error>>{
         let object_id = ObjectId::parse_str(id).unwrap();
         let filter = doc! {"_id":object_id};
-        let collection = db.collection::<User>(COLLECTION_NAME);
+        let collection = db.collection::<User>(USER_COLLECTION);
         let user_detail = collection.find_one(filter).await;
         match user_detail {
             Ok(user_detail)=>{return Ok(user_detail)},
@@ -82,7 +82,7 @@ impl UserService{
     pub async fn get_by_email(db:&Database, email:String)->Result<Option<User>, Box<dyn Error>>{
 
         let filter = doc! {"email":email};
-        let collection = db.collection::<User>(COLLECTION_NAME);
+        let collection = db.collection::<User>(USER_COLLECTION);
         let user_detail = collection.find_one(filter).await;
         match user_detail {
             Ok(user_detail)=>{return Ok(user_detail)},
@@ -93,7 +93,7 @@ impl UserService{
     
     pub async fn get_by_(db:&Database, filter:Document)->Result<Option<User>, Box<dyn Error>>{
 
-        let collection = db.collection::<User>(COLLECTION_NAME);
+        let collection = db.collection::<User>(USER_COLLECTION);
         let user_detail = collection.find_one(filter).await;
         match user_detail {
             Ok(user_detail)=>{return Ok(user_detail)},
@@ -109,7 +109,7 @@ impl UserService{
         ->Result<UpdateResult, Box<dyn Error>>
     {
         let filter = doc! {"email":email};
-        let collection = db.collection::<User>(COLLECTION_NAME);
+        let collection = db.collection::<User>(USER_COLLECTION);
         let new_doc = doc! {
             "$set":{
                 "code":new_data.code.to_owned(),

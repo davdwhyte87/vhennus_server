@@ -1,7 +1,4 @@
-
-
 # Amorgens server
-
 
 
 ## V1.1
