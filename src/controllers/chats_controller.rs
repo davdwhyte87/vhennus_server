@@ -71,8 +71,13 @@ pub async fn create_chat(
 #[derive(Deserialize)]
 struct ChatPath {
     id: String,
-    name:String,
 }
+
+#[derive(Deserialize)]
+struct ChatPathName {
+    name: String,
+}
+
 
 #[get("/get_pair/{id}")]
 pub async fn get_by_pair(
@@ -104,6 +109,43 @@ pub async fn get_by_pair(
     return HttpResponse::Ok().json(respData)
 }
 
+#[get("/get_all_chats")]
+pub async fn get_all_chats(
+    claim:Option<ReqData<Claims>>,
+    database:Data<MongoService>,
+)->HttpResponse{
+    let mut respData = GenericResp::<Vec<Chat>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    let chats = match ChatService::get_user_chats(&database.db, claim.user_name.clone()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting chats {}", err.to_string());
+            respData.message = "error getting chats".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json( respData); 
+        }
+    };
+    respData.message = "ok".to_string();
+    respData.server_message = None;
+    respData.data = Some(chats);
+    return HttpResponse::Ok().json(respData)
+}
 
 #[post("/create")]
 pub async fn create_group_chat(
@@ -178,7 +220,7 @@ pub async fn create_group_chat(
 #[get("/get_chats/{name}")]
 pub async fn get_group_chats(
     database:Data<MongoService>,
-    path: web::Path<ChatPath>,
+    path: web::Path<ChatPathName>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
    
@@ -212,7 +254,7 @@ pub async fn get_group_chats(
 #[get("/get_circle/{name}")]
 pub async fn get_circle(
     database:Data<MongoService>,
-    path: web::Path<ChatPath>,
+    path: web::Path<ChatPathName>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
     let mut respData = GenericResp::<Circle>{

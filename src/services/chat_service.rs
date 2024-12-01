@@ -99,7 +99,7 @@ impl ChatService {
     }
 
 
-    pub async fn get_user_chats(db:&Database, user_name:String)->Result<(), Box<dyn Error>>{
+    pub async fn get_user_chats(db:&Database, user_name:String)->Result<Vec<Chat>, Box<dyn Error>>{
         let collection = db.collection::<Chat>(CHAT_COLLECTION);
 
         let filter = doc! {
@@ -131,7 +131,7 @@ impl ChatService {
         }else{
             return Err(Box::from("Error reaching chat"));
         }
-        Ok(())
+        Ok(chats)
     }
 
     pub async fn get_chats_by_pair_id(db:&Database, id:String)->Result<Vec<Chat>, Box<dyn Error>>{
