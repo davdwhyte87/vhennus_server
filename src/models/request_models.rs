@@ -112,6 +112,11 @@ pub struct  CreateGroupChatReq{
     pub image:String
 }
 
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  CreateChatPairReq{
+    pub user_name: String
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  BuyCoinReq{

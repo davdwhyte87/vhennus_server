@@ -1,7 +1,7 @@
 use std::error::Error;
 
-use futures::{future::ok, StreamExt};
-use mongodb::{bson::doc, Database};
+use futures::{future::ok, StreamExt, TryStreamExt};
+use mongodb::{bson::{doc, from_document}, Database};
 
 use crate::{models::{fried_request::{FriendRequest, FriendRequestStatus}, profile::Profile}, utils::general::get_current_time_stamp};
 
@@ -21,16 +21,47 @@ impl FriendRequestService {
         // Get a handle to a collection in the database.
         let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
 
-        let mut res = match collection.find(doc! {"user_name": user_name}).await{
+        let lookup_2 = doc! {
+            "$lookup":
+               {
+                  "from": "Profile",
+                  "localField": "requester",
+                  "foreignField": "user_name",
+                  "as": "requester_profile"
+               }
+        };
+        let unwind = doc! {
+            "$unwind": {
+                "path": "$requester_profile",
+                "preserveNullAndEmptyArrays": true
+            }
+        };
+
+        let filter = doc! {"$match":doc! {"user_name":user_name.clone(), "status":FriendRequestStatus::PENDING.to_string()}}; 
+        let mut results = match collection.aggregate(vec![filter,lookup_2, unwind]).await{
             Ok(data)=>{data},
             Err(err)=>{
                 log::error!(" error fetching friend request data  {}", err.to_string());
                 return Err(err.into())   
             }
         };
+
         let mut requests:Vec<FriendRequest> = vec![];
-        while let Some(request) = res.next().await{
-            requests.push(request?);
+
+
+        while let Some(request) = results.try_next().await?{
+            log::error!("document {}", request);
+            let x:FriendRequest = match from_document(request){
+
+                Ok(data)=>{
+                    data
+                },
+                Err(err)=>{
+                    log::error!(" error converting document to friend request  {}", err.to_string());
+                    return Err(err.into())   
+                }
+            };
+            requests.push(x);
         }
 
         Ok(requests)

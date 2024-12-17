@@ -70,7 +70,7 @@ pub async fn get_profile(
     };
 
     // get by username
-    let profile = match ProfileService::get_profile(&database.db, claim.user_name.clone()).await{
+    let profile = match ProfileService::get_friends(&database.db, claim.user_name.clone()).await{
         Ok(data)=>{data},
         Err(err)=>{
             respData.message = "Error getting user profile".to_string();
@@ -195,8 +195,8 @@ pub async fn update_profile(
     if req.occupation.is_some(){
         profile.occupation = req.occupation.clone().unwrap();
     }
-    if req.work.is_some(){
-        profile.work = req.work.clone().unwrap();
+    if req.name.is_some(){
+        profile.name = req.name.clone().unwrap();
     }
 
     profile.user_name = claim.user_name.clone();
@@ -213,7 +213,12 @@ pub async fn update_profile(
             return HttpResponse::InternalServerError().json(respData)   
         }
     };
-    return HttpResponse::Ok().json({});
+
+    respData.message = "Ok".to_string();
+    respData.server_message =None;
+    respData.data = Some(profile);
+
+    return HttpResponse::Ok().json(respData);
 }
 
 

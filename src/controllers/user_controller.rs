@@ -638,7 +638,8 @@ pub async fn send_friend_request(
         requester:claim.user_name.clone(),
         status:FriendRequestStatus::PENDING,
         created_at:chrono::offset::Utc::now().to_string(),
-        updated_at:chrono::offset::Utc::now().to_string()
+        updated_at:chrono::offset::Utc::now().to_string(),
+        requester_profile: None
     };
 
     match FriendRequestService::create_friend_request(&database.db, friend_request).await{
@@ -765,7 +766,7 @@ pub async fn get_my_friend_request(
             respData.message = "Error getting friend request".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
-
+            log::error!("error getting friend requests  {}", err.to_string());
             return HttpResponse::InternalServerError().json(respData);
         }
     };

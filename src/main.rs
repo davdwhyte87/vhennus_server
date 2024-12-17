@@ -173,6 +173,8 @@ async fn main() -> std::io::Result<()> {
                         .service(chats_controller::create_chat)
                         .service(chats_controller::get_by_pair)
                         .service(chats_controller::get_all_chats)
+                        .service(chats_controller::create_chat_pair)
+                        .service(chats_controller::get_my_chat_pairs)
                     )
                     .service(
                         web::scope("circle")

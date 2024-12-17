@@ -5,7 +5,7 @@ use futures::{future::OkInto, StreamExt, TryStreamExt};
 use mongodb::{bson::{doc, from_document}, results::{InsertOneResult, UpdateResult}, Database};
 use r2d2_mongodb::mongodb::coll;
 
-use crate::models::{buy_order::BuyOrder, profile::Profile, sell_order::SellOrder};
+use crate::{models::{buy_order::BuyOrder, profile::Profile, sell_order::SellOrder}, utils::general::get_current_time_stamp};
 
 
 pub const PROFILE_COLLECTION:&str = "Profile";
@@ -29,7 +29,7 @@ impl ProfileService {
 
         let match_ = doc! {
             "$match":{
-                "user_name": user_name
+                "user_name": user_name.clone()
             }
         };
 
@@ -42,23 +42,45 @@ impl ProfileService {
             }
         };
 
-        if let Some(data) = res.next().await{
-            match data {
-                Ok(datax)=>{
-                    // decode document 
-                    let profile:Profile = from_document(datax)?;
-                    return Ok(profile)
-                },
-                Err(err)=>{
-                    log::error!(" error fetching profile data  {}", err.to_string());
-                    return Err(err.into())    
-                }
-            }
-        }else{
-            return Err(Box::from("Error getting data")) ;
+        let mut profiles:Vec<Profile> = vec![];
+        while let Some(data) = res.try_next().await?{
+            let profile:Profile = from_document(data)?;
+            profiles.push(profile);
         }
 
-     
+        let profile = match profiles.get(0){
+            Some(data)=>{
+                return Ok(data.clone())
+            },
+            None=>{
+                // create 
+                let new_profile  = Profile{
+                    id: uuid::Uuid::new_v4().to_string(),
+                    user_name: user_name.clone(),
+                    bio: "".to_string(),
+                    name: "".to_string(),
+                    occupation: "".to_string(),
+                    created_at: get_current_time_stamp(),
+                    image:"".to_string(),
+                    updated_at: get_current_time_stamp(),
+                    friends: vec![],
+                    friends_models: None
+                };
+
+                // create profile 
+                match collection.insert_one(new_profile.clone()).await{
+                    Ok(_)=>{},
+                    Err(err)=>{
+                        log::error!(" error creating profile data  {}", err.to_string());
+                        return Err(err.into()) 
+                    }
+                };
+
+                new_profile
+            }
+        };
+        
+        return Ok(profile)
     }
 
 
@@ -135,7 +157,7 @@ impl ProfileService {
         // update profile
         let update_data = doc! {"$set":doc! {
             "bio":profile.bio.to_owned().clone(),
-            "work":profile.work.clone(),
+            "name":profile.name.clone(),
             "occupation": profile.occupation.clone(),
             "image": profile.image.clone(),
             "updated_at": chrono::offset::Utc::now().to_string(),

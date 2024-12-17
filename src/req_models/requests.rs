@@ -17,7 +17,7 @@ pub struct CreateOrderMessageReq{
 pub struct UpdateProfileReq{
     pub bio:Option<String>, 
     pub image:Option<String>, 
-    pub work:Option<String>,
+    pub name:Option<String>,
     pub occupation:Option<String>
 }
 

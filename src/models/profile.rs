@@ -15,7 +15,7 @@ pub struct Profile {
     pub id: String,
     pub user_name:String, 
     pub bio: String,
-    pub work:String,
+    pub name:String,
     pub occupation:String, 
     pub image:String,
     pub created_at:String,
