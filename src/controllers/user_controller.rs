@@ -679,6 +679,7 @@ pub async fn accept_friend_request(
             match data{
                 Some(data)=>{data},
                 None=>{
+                    log::error!("error getting FR NOT FOUND");
                     respData.message = "Error finding request".to_string();
                     respData.server_message = None;
                     respData.data = None;
@@ -687,7 +688,87 @@ pub async fn accept_friend_request(
             }
         },
         Err(err)=>{
+            log::error!("error getting FR {}", err);
             respData.message = "Error accepting friend request".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
+
+    log::error!("Got friend request ");
+
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    // check if the req owner owns the friend request
+    if fr.user_name != claim.user_name.clone(){
+        respData.message = "you cannot accept this request".to_string();
+        respData.server_message = None;
+        respData.data = None;
+
+        return HttpResponse::BadRequest().json(respData);
+    }
+ 
+    match FriendRequestService::accept_friend_request(&database.db, fr).await{
+        Ok(data)=>{data}, 
+        Err(err)=>{
+            log::error!("accepting request {}", err);
+            respData.message = "Error accepting friend request".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
+
+    respData.message = "Ok".to_string();
+    respData.server_message =None;
+    respData.data = None;
+    return HttpResponse::Ok().json(respData);
+
+}
+
+
+
+#[get("/friend_request/reject/{id}")]
+pub async fn reject_friend_request(
+    database:Data<MongoService>,
+    path: web::Path<GenID>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+    let mut respData = GenericResp::<FriendRequest>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: Some(FriendRequest::default())
+    };
+
+    // get friend request 
+    let fr = match FriendRequestService::get_single_friend_request(&database.db, path.id.clone()).await{
+        Ok(data)=>{
+            match data{
+                Some(data)=>{data},
+                None=>{
+                    respData.message = "Error finding request".to_string();
+                    respData.server_message = None;
+                    respData.data = None;
+                    return HttpResponse::BadRequest().json(respData);   
+                }
+            }
+        },
+        Err(err)=>{
+            log::error!("error getting FR {}", err);
+            respData.message = "Error getting friend request".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
 
@@ -718,10 +799,11 @@ pub async fn accept_friend_request(
         return HttpResponse::BadRequest().json(respData);
     }
  
-    match FriendRequestService::accept_friend_request(&database.db, fr).await{
+    match FriendRequestService::delete_friend_request(&database.db, fr.id).await{
         Ok(data)=>{data}, 
         Err(err)=>{
-            respData.message = "Error accepting friend request".to_string();
+            log::error!("error deleting FR {}", err);
+            respData.message = "Error deleting friend request".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
 
@@ -729,8 +811,10 @@ pub async fn accept_friend_request(
         }
     };
 
-
-    return HttpResponse::Ok().json({});
+    respData.message = "Ok".to_string();
+    respData.server_message =None;
+    respData.data = None;
+    return HttpResponse::Ok().json(respData);
 
 }
 

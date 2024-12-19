@@ -50,7 +50,7 @@ impl FriendRequestService {
 
 
         while let Some(request) = results.try_next().await?{
-            log::error!("document {}", request);
+            // log::error!("document {}", request);
             let x:FriendRequest = match from_document(request){
 
                 Ok(data)=>{
@@ -99,9 +99,25 @@ impl FriendRequestService {
         Ok(())
     }
 
+
+    pub async fn delete_friend_request(db:&Database, id:String)->Result<(), Box<dyn Error>>{
+        let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
+
+        let res = match collection.delete_one(doc! {"id":id}).await{
+            Ok(data)=>{data},
+            Err(err)=>{
+                log::error!(" error deleting freind request  {}", err.to_string());
+                return Err(err.into())   
+            }
+        };
+
+        Ok(())
+    }
+
     
     pub async fn accept_friend_request(db:&Database, mut request:FriendRequest)->Result<(),Box<dyn Error>>{
-        let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
+        log::debug!("accept FR service starting ...");
+        //let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
         let mut  session = match db.client().start_session().await{
             Ok(data)=>{data},
             Err(err)=>{
@@ -128,7 +144,7 @@ impl FriendRequestService {
             }
         };
         // update the request 
-        let res = match fr_collection.update_one(doc! {"user_name":request.user_name.clone()},update_data).session(&mut session).await{
+        let res = match fr_collection.update_one(doc! {"id":request.id.clone()},update_data).session(&mut session).await{
             Ok(data)=>{data},
             Err(err)=>{
                 log::error!(" error inserting freind request  {}", err.to_string());

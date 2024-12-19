@@ -165,6 +165,7 @@ async fn main() -> std::io::Result<()> {
                     .service(
                         web::scope("user")
                         .service(user_controller::accept_friend_request)
+                        .service(user_controller::reject_friend_request)
                         .service(user_controller::send_friend_request)
                         .service(user_controller::get_my_friend_request)
                     )
