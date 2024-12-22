@@ -159,6 +159,7 @@ async fn main() -> std::io::Result<()> {
                         web::scope("profile")
                         .service(profile_controller::update_profile)
                         .service(profile_controller::get_profile)
+                        .service(profile_controller::get_user_profile)
                         .service(profile_controller::get_friends)
                         .service(profile_controller::search)
                     )
@@ -176,6 +177,8 @@ async fn main() -> std::io::Result<()> {
                         .service(chats_controller::get_all_chats)
                         .service(chats_controller::create_chat_pair)
                         .service(chats_controller::get_my_chat_pairs)
+                        .service(chats_controller::find_chat_pair)
+
                     )
                     .service(
                         web::scope("circle")

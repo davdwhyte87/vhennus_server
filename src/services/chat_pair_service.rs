@@ -52,6 +52,29 @@ impl ChatPairService {
     }
 
 
+    pub async  fn find_chat_pair(db:&Database, user1:String, user2:String)->Result<Option<ChatPair>, Box<dyn Error>>{
+        
+        let pair_collection = db.collection::<ChatPair>(CHAT_PAIR_COLLECTION);
+
+        // check if pair exists 
+
+        let filter = doc! {
+            "users_ids": {"$all":vec![user1, user2]}
+        };
+        let chat_pair = match pair_collection.find_one(filter).await {
+            Ok(data)=>{
+               data
+            },
+            Err(err)=>{
+                log::error!(" error finding  chat pair  {}", err.to_string());
+                return Err(err.into()) 
+            }
+        };
+
+        Ok(chat_pair)
+    }
+
+
     pub async fn get_chat_pair_by_id(db:&Database, id:String)->Result<ChatPair, Box<dyn Error>>{
         let collection = db.collection::<ChatPair>(CHAT_PAIR_COLLECTION);
 

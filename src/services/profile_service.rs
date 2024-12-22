@@ -15,7 +15,7 @@ pub struct  ProfileService{
 }
 
 impl ProfileService {
-    pub async fn get_friends(db:&Database, user_name:String)->Result<Profile, Box<dyn Error>>{
+    pub async fn get_user_profile(db:&Database, user_name:String)->Result<Profile, Box<dyn Error>>{
         let collection = db.collection::<Profile>(PROFILE_COLLECTION);
         let lookup_3 = doc! {
             "$lookup":

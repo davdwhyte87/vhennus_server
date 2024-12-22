@@ -58,7 +58,7 @@ pub async fn create_chat(
     }
 
     
-    match ChatService::create_chat(&database.db, &chat).await{
+    match ChatService::create_chat(&database.db, &mut chat).await{
         Ok(_)=>{},
         Err(err)=>{
             log::error!("{}", err)
@@ -217,6 +217,56 @@ pub async fn create_chat_pair(
         Err(err)=>{
             log::error!("error creating chat  {}", err.to_string());
             respData.message = "Error creating chat pair".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json( respData);    
+        }
+    };
+
+    respData.message = "ok".to_string();
+    respData.server_message = None;
+    respData.data = Some(res);
+    return HttpResponse::Ok().json(respData)
+}
+
+#[derive(Deserialize)]
+struct FindChatPairPath{
+    pub user_name:String
+}
+
+#[get("/find_chat_pair/{user_name}")]
+pub async fn find_chat_pair(
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>,
+    path:web::Path<FindChatPairPath>
+)->HttpResponse{
+
+    let mut respData = GenericResp::<Option<ChatPair>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+
+
+    let res = match ChatPairService::find_chat_pair(&database.db, claim.user_name.clone(), path.user_name.clone()).await {
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting chats  {}", err.to_string());
+            respData.message = "Error getting chat pairs".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
             return HttpResponse::InternalServerError().json( respData);    
