@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{env, error, fmt};
 use actix_web::error::JsonPayloadError;
 use actix_web::{ get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
@@ -12,6 +13,7 @@ use controllers::{
 
 };
 mod models;
+use dashmap::DashMap;
 use dotenv::dotenv;
 use get_if_addrs::get_if_addrs;
 use log::{info, error, debug};
@@ -20,7 +22,8 @@ mod database;
 use database::db::db;
 mod services;
 use serde_json::json;
-use services::{user_service};
+use services::chat_session_service::UserConnections;
+use services::{chat_session_service, user_service};
 use thiserror::Error;
 use crate::services::mongo_service::MongoService;
 mod utils;
@@ -89,9 +92,15 @@ async fn main() -> std::io::Result<()> {
         address =format!("{}:{}",ip_address, port);
     }
     info!("Starting server on {}", address);
+
+    // hashmap for holding websocket connections for chat
+    let user_connections: UserConnections = Arc::new(DashMap::new());
+
     HttpServer::new(move|| {
-        
+
         App::new()
+        .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+            .route("/ws", web::get().to(chat_session_service::ws_chat)) 
             .app_data(db_data.clone())
             
             // USER CONTROLLERS
@@ -178,7 +187,7 @@ async fn main() -> std::io::Result<()> {
                         .service(chats_controller::create_chat_pair)
                         .service(chats_controller::get_my_chat_pairs)
                         .service(chats_controller::find_chat_pair)
-
+                        .route("/ws", web::get().to(chats_controller::we_chat_connect)) 
                     )
                     .service(
                         web::scope("circle")
@@ -186,6 +195,7 @@ async fn main() -> std::io::Result<()> {
                         .service(chats_controller::get_circle)
                         .service(chats_controller::get_group_chats)
                     )
+                   
             )
             .service(user_controller::create_user)
             .service(user_controller::login_user)

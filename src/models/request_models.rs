@@ -104,6 +104,8 @@ pub struct  CreateChatReq{
     pub image:Option<String>
 }
 
+
+
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  CreateGroupChatReq{
     pub name: String,

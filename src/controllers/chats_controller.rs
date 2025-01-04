@@ -1,8 +1,9 @@
-use actix_web::{cookie::time::error, dev::Path, get, post, web::{self, Data, ReqData}, HttpResponse};
+use actix_web::{cookie::time::error, dev::Path, get, post, web::{self, Data, ReqData}, Error, HttpRequest, HttpResponse};
+use actix_ws::handle;
 use mongodb::bson::doc;
 use serde::Deserialize;
 
-use crate::{models::{chat::Chat, chat_pair::ChatPair, circle::Circle, request_models::{CreateChatReq, CreateGroupChatReq}, response::GenericResp}, services::{chat_pair_service::ChatPairService, chat_service::ChatService, circle_service::CircleService, mongo_service::MongoService, user_service::UserService}, utils::{auth::Claims, general::get_current_time_stamp}};
+use crate::{models::{chat::Chat, chat_pair::ChatPair, circle::Circle, request_models::{CreateChatReq, CreateGroupChatReq}, response::GenericResp}, services::{chat_pair_service::ChatPairService, chat_service::ChatService, chat_session_service::{chat_ws_service, UserConnections}, circle_service::CircleService, mongo_service::MongoService, user_service::UserService}, utils::{auth::Claims, general::get_current_time_stamp}};
 
 
 #[post("/create")]
@@ -468,6 +469,30 @@ pub async fn get_circle(
 
 }
 
-// create group chat
+
+// connect chat with websocket
+pub async fn we_chat_connect(
+    req: HttpRequest,
+    stream: web::Payload,
+    data: web::Data<UserConnections>,
+    claim:Option<ReqData<Claims>>,
+    database:Data<MongoService>,
+) -> Result<HttpResponse, Error> {
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+           
+            return Ok(HttpResponse::Unauthorized()
+                .json({}))
+        }
+    };
+
+    let (response,session, mut msg_stream) = handle(&req, stream)?;
+    actix_web::rt::spawn(async move {
+        chat_ws_service(session,  msg_stream, claim.user_name.to_owned(), data, &database.db).await;
+    });
+    
+    Ok(response)
+}
 
 

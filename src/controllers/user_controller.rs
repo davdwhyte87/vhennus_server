@@ -23,6 +23,7 @@ use crate::req_models::create_user_req::CreateUserReq;
 use crate::services::friend_request_service::FriendRequestService;
 use crate::services::mongo_service::MongoService;
 
+use crate::services::profile_service::ProfileService;
 use crate::services::tcp::{self, send_to_tcp_server};
 use crate::services::user_service::UserService;
 use crate::services::wallet_service::WalletService;
@@ -599,6 +600,39 @@ pub async fn send_friend_request(
         }
     };
 
+    // get the user profile of the request user and check if the user has the new friend already
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    let user_profile = match ProfileService::get_user_profile(&database.db, claim.user_name.clone()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting user {}", err);
+            respData.message = "Error getting user profile".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData); 
+        }
+    };
+
+    for friend in user_profile.friends{
+        if friend == req.user_name.clone(){
+            respData.message = "Users are already friends".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);   
+        }
+    }
+
     match UserService::get_by_(&database.db, doc! {"user_name":req.user_name.clone()}).await{
         Ok(data)=>{
             match data {
@@ -612,26 +646,15 @@ pub async fn send_friend_request(
             }
         },
         Err(err)=>{
+            log::error!("error getting user {}", err);
             respData.message = "Error getting username".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
-
             return HttpResponse::BadRequest().json(respData);
         }
     }
 
-    let claim = match claim {
-        Some(claim)=>{claim},
-        None=>{
-            respData.message = "Unauthorized".to_string();
-
-            return HttpResponse::Unauthorized()
-                .json(
-                    respData
-                )
-        }
-    };
-
+  
     let friend_request = FriendRequest{
         id: uuid::Uuid::new_v4().to_string(),
         user_name: req.user_name.clone(),
@@ -646,14 +669,15 @@ pub async fn send_friend_request(
         Ok(data)=>{data}, 
         Err(err)=>{
             respData.message = "Error creating friend request".to_string();
+            if (err.to_string() == "FRIEND_REQUEST_EXISTS"){
+                respData.message = "Friend request already sent!".to_string();   
+            }
             respData.server_message = Some(err.to_string());
             respData.data = None;
-
+            log::error!("error creating friend request {}", err);
             return HttpResponse::InternalServerError().json(respData);
         }
     };
-
-
     return HttpResponse::Ok().json({});
 
 }

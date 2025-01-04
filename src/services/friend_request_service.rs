@@ -88,6 +88,29 @@ impl FriendRequestService {
     pub async fn create_friend_request(db:&Database, request:FriendRequest)->Result<(),Box<dyn Error>>{
         let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
 
+        // check if there is already a friend request 
+        let filter = doc! {
+            "user_name": request.user_name.clone(),
+            "requester": request.requester.clone()
+        };
+
+        let fr = match collection.find_one(filter).await{
+            Ok(data)=>{data},
+            Err(err)=>{
+                log::error!(" error error geting friend request {}", err.to_string());
+                return Err(err.into())  
+            }
+        };
+
+        match fr {
+            Some(_)=>{
+                return Err(Box::from("FRIEND_REQUEST_EXISTS")); 
+            },
+            None=>{
+
+            }
+        }
+        
         let res = match collection.insert_one(request).await{
             Ok(data)=>{data},
             Err(err)=>{

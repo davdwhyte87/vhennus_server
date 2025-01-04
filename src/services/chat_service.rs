@@ -16,7 +16,7 @@ pub struct  ChatService{
 }
 
 impl ChatService {
-    pub async fn create_chat(db:&Database, chat:&mut Chat)->Result<(), Box<dyn Error>>{
+    pub async fn create_chat(db:&Database, chat:&mut Chat)->Result<Chat, Box<dyn Error>>{
         let collection = db.collection::<Chat>(CHAT_COLLECTION);
         let user_collection = db.collection::<User>(USER_COLLECTION);
 
@@ -101,7 +101,8 @@ impl ChatService {
         };
 
         chat.pair_id = chat_pair.id;
-     
+        let res_chat = chat.clone();
+
         match collection.insert_one(chat).await{
             Ok(data)=>{},
             Err(err)=>{
@@ -109,7 +110,21 @@ impl ChatService {
                 return Err(err.into())
             }
         }
-        Ok(())
+
+        // update the chat pair with last message 
+        match pair_collection.update_one(doc! {
+            "id":res_chat.pair_id.clone()
+        }, doc! {"$set": doc! {"last_message":res_chat.message.clone()}}).await{
+            Ok(_)=>{
+                // we do not care if it fails... 
+            },
+            Err(err)=>{
+                // log failure
+                log::error!(" error updating chat pair  {}", err.to_string());
+               
+            }
+        };
+        Ok(res_chat)
     }
 
 

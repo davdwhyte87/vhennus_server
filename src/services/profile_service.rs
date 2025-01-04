@@ -2,7 +2,7 @@
 use std::{error::Error, vec};
 
 use futures::{future::OkInto, StreamExt, TryStreamExt};
-use mongodb::{bson::{doc, from_document}, results::{InsertOneResult, UpdateResult}, Database};
+use mongodb::{bson::{doc, from_document, Regex}, results::{InsertOneResult, UpdateResult}, Database};
 use r2d2_mongodb::mongodb::coll;
 
 use crate::{models::{buy_order::BuyOrder, profile::Profile, sell_order::SellOrder}, utils::general::get_current_time_stamp};
@@ -85,8 +85,31 @@ impl ProfileService {
 
 
     pub async fn search(db:&Database, data:String)->Result<Vec<Profile>, Box<dyn Error>>{
-        let filter =  doc! { "user_name": { "$regex": data, "$options": "i" } };
+        // let filter =  doc! { "user_name": { "$regex": data, "$options": "i" } };
+
         let collection = db.collection::<Profile>(PROFILE_COLLECTION);
+
+        let trimmed_data = data.trim();
+        //let escaped_data = regex::escape(trimmed_data);
+        let words: Vec<&str> = trimmed_data.split_whitespace().collect();
+        let regex_pattern = if words.is_empty() {
+            "".to_string()
+        } else {
+            words
+                .iter()
+                .map(|word| format!("(?=.*{})", regex::escape(word))) // Lookahead assertion
+                .collect::<String>()
+        };
+        let regex = Regex {
+            pattern: regex_pattern,
+            options: "i".to_string(),
+        };
+        let filter =doc! {
+            "$or": [
+                doc! { "user_name": { "$regex": &regex } },
+                doc! { "name": { "$regex": &regex } },
+            ]
+        };
 
         let mut cursor = match collection.find(filter).await{
             Ok(data)=>{data},

@@ -23,3 +23,4 @@ pub mod friend_request_service;
 pub mod chat_service;
 pub mod circle_service;
 pub mod chat_pair_service;
+pub mod chat_session_service;
