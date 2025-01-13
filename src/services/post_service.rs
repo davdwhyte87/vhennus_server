@@ -102,6 +102,32 @@ impl PostService {
        return Ok(posts);
     }
 
+
+    pub async fn get_all_my_posts(db:&Database, user_name:String)->Result<Vec<Post>, Box<dyn Error>>{
+        let collection = db.collection::<Post>(POST_SERVICE_COLLECTION);
+        let lookup_2 = doc! {
+            "$lookup":
+               {
+                  "from": "Comment",
+                  "localField": "comments_ids",
+                  "foreignField": "id",
+                  "as": "comments"
+               }
+        };
+
+        let filter = doc! {
+            "$match":{"user_name":user_name}
+        };
+
+       let mut results = collection.aggregate(vec![filter,lookup_2]).await?;
+       let mut posts:Vec<Post> = Vec::new();
+       while let Some(result) = results.next().await{
+           let data: Post= from_document(result?)?;
+           posts.push(data);
+       }
+       return Ok(posts);
+    }
+
     pub async fn get_single_post(db:&Database, id:String)->Result<Post, Box<dyn Error>>{
         let collection = db.collection::<Post>(POST_SERVICE_COLLECTION);
         let lookup_2 = doc! {

@@ -322,7 +322,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
         Ok(data)=>{data},
         Err(err)=>{
             log::error!(" error persing req data  {}", err.to_string());
-            respData.message = "Error persing data".to_string();
+            respData.message = "Block chain server error".to_string();
             respData.server_message =Some(err.to_string());
             respData.data = None;
             return HttpResponse::BadRequest().json(respData);  
@@ -344,7 +344,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
                 Ok(data)=>{data},
                 Err(err)=>{
                     log::info!(" error from blockchain {}", err.to_string());
-                    respData.message = "Error persing data".to_string();
+                    respData.message = "Error from blockchain server".to_string();
                     respData.server_message =Some(err.to_string());
                     respData.data = None;
                     return HttpResponse::BadRequest().json(respData);     
@@ -353,7 +353,7 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
         },
         Err(err)=>{ 
             log::error!(" error from blockchain tcpreq  {}", err.to_string());
-            respData.message = "Error persing data".to_string();
+            respData.message = "Error from blockchian server".to_string();
             respData.server_message =Some(err.to_string());
             respData.data = None;
             return HttpResponse::BadRequest().json(respData);   
@@ -370,10 +370,20 @@ pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKura
             return HttpResponse::BadRequest().json(respData);     
         }
     };
+    let mess = match resp_data.get(1){
+        Some(data)=>{data},
+        None=>{
+            respData.message = "Error with blockchain response data".to_string();
+            respData.server_message =None;
+            respData.data = None;
+            ""
+            // return HttpResponse::BadRequest().json(respData);     
+        }
+    };
 
     if(*code != "1"){
         // blockchain request failed
-        respData.message = "Failed to create digital ID on blockchain".to_string();
+        respData.message = "".to_string()+mess;
             respData.server_message =None;
             respData.data = None;
             return HttpResponse::BadRequest().json(respData);     
@@ -483,7 +493,7 @@ pub async fn kura_id_signup(database:Data<MongoService>, req_data:Json<CreateKur
         Ok(data)=>{data},
         Err(err)=>{
             log::error!(" error persing request data   {}", err.to_string());
-            respData.message = "Error persing data".to_string();
+            respData.message = "Blockchain server error".to_string();
             respData.server_message =Some(err.to_string());
             respData.data = None;
             return HttpResponse::BadRequest().json(respData);  
