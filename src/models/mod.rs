@@ -21,3 +21,8 @@ pub mod price;
 pub mod system;
 pub mod trivia_question;
 pub mod trivia_game;
+pub mod profile;
+pub mod fried_request;
+pub mod chat;
+pub mod circle;
+pub mod chat_pair;

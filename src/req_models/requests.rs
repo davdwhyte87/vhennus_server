@@ -13,6 +13,15 @@ pub struct CreateOrderMessageReq{
 }
 
 
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct UpdateProfileReq{
+    pub bio:Option<String>, 
+    pub image:Option<String>, 
+    pub name:Option<String>,
+    pub occupation:Option<String>
+}
+
+
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct GetAllOrderMessageReq{

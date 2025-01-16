@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{env, error, fmt};
 use actix_web::error::JsonPayloadError;
 use actix_web::{ get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
@@ -8,19 +9,21 @@ mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
 use controllers::trivia_game_controller::{self, get_todays_game};
 use controllers::{
-    buy_order_controller, order_message_controller, payment_method_controller, post_controller, sell_order_controller, system_controller, user_controller, wallet_controller
+    buy_order_controller, chats_controller, order_message_controller, payment_method_controller, post_controller, profile_controller, sell_order_controller, system_controller, user_controller, wallet_controller
 
 };
 mod models;
+use dashmap::DashMap;
 use dotenv::dotenv;
 use get_if_addrs::get_if_addrs;
 use log::{info, error, debug};
-use models::{response};
+use models::{response, user};
 mod database;
 use database::db::db;
 mod services;
 use serde_json::json;
-use services::{user_service};
+use services::chat_session_service::UserConnections;
+use services::{chat_session_service, user_service};
 use thiserror::Error;
 use crate::services::mongo_service::MongoService;
 mod utils;
@@ -89,9 +92,15 @@ async fn main() -> std::io::Result<()> {
         address =format!("{}:{}",ip_address, port);
     }
     info!("Starting server on {}", address);
+
+    // hashmap for holding websocket connections for chat
+    let user_connections: UserConnections = Arc::new(DashMap::new());
+
     HttpServer::new(move|| {
-        
+
         App::new()
+        .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+            .route("/ws", web::get().to(chat_session_service::ws_chat)) 
             .app_data(db_data.clone())
             
             // USER CONTROLLERS
@@ -146,6 +155,7 @@ async fn main() -> std::io::Result<()> {
                         .service(post_controller::create_post)
                         .service(post_controller::create_comment)
                         .service(post_controller::get_all_posts)
+                        .service(post_controller::get_my_posts)
                         .service(post_controller::get_single_posts)
                         .service(post_controller::like_post)
                     )
@@ -155,6 +165,38 @@ async fn main() -> std::io::Result<()> {
                         .service(trivia_game_controller::get_todays_game)  
                         .service(trivia_game_controller::play_game)
                     )
+                    .service(
+                        web::scope("profile")
+                        .service(profile_controller::update_profile)
+                        .service(profile_controller::get_profile)
+                        .service(profile_controller::get_user_profile)
+                        .service(profile_controller::get_friends)
+                        .service(profile_controller::search)
+                    )
+                    .service(
+                        web::scope("user")
+                        .service(user_controller::accept_friend_request)
+                        .service(user_controller::reject_friend_request)
+                        .service(user_controller::send_friend_request)
+                        .service(user_controller::get_my_friend_request)
+                    )
+                    .service(
+                        web::scope("chat")
+                        .service(chats_controller::create_chat)
+                        .service(chats_controller::get_by_pair)
+                        .service(chats_controller::get_all_chats)
+                        .service(chats_controller::create_chat_pair)
+                        .service(chats_controller::get_my_chat_pairs)
+                        .service(chats_controller::find_chat_pair)
+                        .route("/ws", web::get().to(chats_controller::we_chat_connect)) 
+                    )
+                    .service(
+                        web::scope("circle")
+                        .service(chats_controller::create_group_chat)
+                        .service(chats_controller::get_circle)
+                        .service(chats_controller::get_group_chats)
+                    )
+                   
             )
             .service(user_controller::create_user)
             .service(user_controller::login_user)

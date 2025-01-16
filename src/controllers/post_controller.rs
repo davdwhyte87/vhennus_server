@@ -68,8 +68,8 @@ pub async fn create_post(
         likes : vec![],
         comments_ids: vec![],
         comments: None,
-        number_of_views: 100
-
+        number_of_views: 100,
+        profile: None
     };
 
 
@@ -135,6 +135,51 @@ pub async fn get_all_posts(
     return HttpResponse::Ok().json( respData);
     
 }
+
+
+#[get("/allmy")]
+pub async fn get_my_posts(
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+
+    let mut respData = GenericResp::<Vec<Post>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+    println!("new req");
+
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    let posts = match PostService::get_all_my_posts(&database.db, claim.user_name.clone()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!(" error getting posts {}", err.to_string());
+            respData.message = "Error getting posts".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json( respData);
+        }
+    };
+
+    respData.message = "".to_string();
+    respData.server_message = None;
+    respData.data = Some(posts);
+    return HttpResponse::Ok().json( respData);
+    
+}
+
 
 #[derive(Deserialize)]
 struct GetSinglePostPath {

@@ -93,7 +93,59 @@ impl PostService {
                }
         };
 
-       let mut results = collection.aggregate(vec![lookup_2]).await?;
+        let lookup_3 = doc! {
+            "$lookup":
+               {
+                  "from": "Profile",
+                  "localField": "user_name",
+                  "foreignField": "user_name",
+                  "as": "profile"
+               }
+        };
+
+        let unwind =   doc! {
+            "$unwind": "$profile"
+        };
+
+       let mut results = collection.aggregate(vec![lookup_2, lookup_3,unwind ]).await?;
+       let mut posts:Vec<Post> = Vec::new();
+       while let Some(result) = results.next().await{
+           let data: Post= from_document(result?)?;
+           posts.push(data);
+       }
+       return Ok(posts);
+    }
+
+
+    pub async fn get_all_my_posts(db:&Database, user_name:String)->Result<Vec<Post>, Box<dyn Error>>{
+        let collection = db.collection::<Post>(POST_SERVICE_COLLECTION);
+        let lookup_2 = doc! {
+            "$lookup":
+               {
+                  "from": "Comment",
+                  "localField": "comments_ids",
+                  "foreignField": "id",
+                  "as": "comments"
+               }
+        };
+
+        let lookup_3 = doc! {
+            "$lookup":
+               {
+                  "from": "Profile",
+                  "localField": "user_name",
+                  "foreignField": "user_name",
+                  "as": "profile"
+               }
+        };
+        let unwind =   doc! {
+            "$unwind": "$profile"
+        };
+        let filter = doc! {
+            "$match":{"user_name":user_name}
+        };
+
+       let mut results = collection.aggregate(vec![filter,lookup_2, lookup_3, unwind]).await?;
        let mut posts:Vec<Post> = Vec::new();
        while let Some(result) = results.next().await{
            let data: Post= from_document(result?)?;
@@ -114,9 +166,21 @@ impl PostService {
                }
         };
 
+        let lookup_3 = doc! {
+            "$lookup":
+               {
+                  "from": "Profile",
+                  "localField": "user_name",
+                  "foreignField": "user_name",
+                  "as": "profile"
+               }
+        };
+        let unwind =   doc! {
+            "$unwind": "$profile"
+        };
         let filter = doc! {"$match":doc! {"id":id}};
 
-       let mut results = collection.aggregate(vec![filter,lookup_2]).await?;
+       let mut results = collection.aggregate(vec![filter,lookup_2, lookup_3, unwind]).await?;
        let mut post:Post = Post::default();
        while let Some(result) = results.next().await{
            let data: Post= from_document(result?)?;

@@ -25,6 +25,8 @@ pub struct CreatePostReq{
     pub text:String
 }
 
+
+
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateCommentReq{
     pub text:String

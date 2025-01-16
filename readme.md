@@ -1,6 +1,20 @@
-
-
 # Amorgens server
+
+
+## V1.1
+Users can: 
+- Create VC ID
+- Login 
+- Update profile 
+- Create post 
+- Like posts
+- Comment and view comments
+- Create friend request 
+- Accept friend request 
+- View friend list 
+- Chat with friend
+- View chats 
+- Create group chat 
 
 
 

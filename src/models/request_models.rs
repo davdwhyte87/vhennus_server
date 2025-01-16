@@ -27,6 +27,12 @@ pub struct  UpdateDiagnosisReq{
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  SendFriendReq{
+    pub user_name: String,
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  LoginReq{
     #[validate(email)]
     pub email:String,
@@ -85,6 +91,32 @@ pub struct  CreateAccountDetailsReq{
     pub account_number: String,
 
     pub bank_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  CreateChatReq{
+
+    pub pair_id: String,
+
+    pub receiver: String,
+
+    pub message: Option<String>,
+    pub image:Option<String>
+}
+
+
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  CreateGroupChatReq{
+    pub name: String,
+    pub display_name:String,
+    pub members: Vec<String>,
+    pub image:String
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  CreateChatPairReq{
+    pub user_name: String
 }
 
 

@@ -10,6 +10,7 @@ pub mod order_message_controller;
 pub mod post_controller;
 pub mod system_controller;
 pub mod trivia_game_controller;
-
+pub mod  profile_controller;
+pub mod chats_controller;
 
 pub const DIAGNOSIS_CONTROLLER_PATH:&str = "/api/v1";
