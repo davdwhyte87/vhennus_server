@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::{default, string::ToString};
 use strum_macros;
 
-use super::{buy_order::BuyOrder, comment::Comment, payment_method::{PaymentMethod, PaymentMethodData}, user::UserType};
+use super::{buy_order::BuyOrder, comment::Comment, payment_method::{PaymentMethod, PaymentMethodData}, profile::Profile, user::UserType};
 
 
 
@@ -20,7 +20,8 @@ pub struct Post {
     pub likes:Vec<String>, //usernames of people who liked 
     pub comments_ids: Vec<String>,
     pub comments: Option<Vec<Comment>>,
-    pub number_of_views:i32
+    pub number_of_views:i32,
+    pub profile:Option<Profile>
 }
 
 

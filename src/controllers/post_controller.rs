@@ -68,8 +68,8 @@ pub async fn create_post(
         likes : vec![],
         comments_ids: vec![],
         comments: None,
-        number_of_views: 100
-
+        number_of_views: 100,
+        profile: None
     };
 
 

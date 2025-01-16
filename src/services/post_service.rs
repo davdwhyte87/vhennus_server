@@ -93,7 +93,21 @@ impl PostService {
                }
         };
 
-       let mut results = collection.aggregate(vec![lookup_2]).await?;
+        let lookup_3 = doc! {
+            "$lookup":
+               {
+                  "from": "Profile",
+                  "localField": "user_name",
+                  "foreignField": "user_name",
+                  "as": "profile"
+               }
+        };
+
+        let unwind =   doc! {
+            "$unwind": "$profile"
+        };
+
+       let mut results = collection.aggregate(vec![lookup_2, lookup_3,unwind ]).await?;
        let mut posts:Vec<Post> = Vec::new();
        while let Some(result) = results.next().await{
            let data: Post= from_document(result?)?;
@@ -115,11 +129,23 @@ impl PostService {
                }
         };
 
+        let lookup_3 = doc! {
+            "$lookup":
+               {
+                  "from": "Profile",
+                  "localField": "user_name",
+                  "foreignField": "user_name",
+                  "as": "profile"
+               }
+        };
+        let unwind =   doc! {
+            "$unwind": "$profile"
+        };
         let filter = doc! {
             "$match":{"user_name":user_name}
         };
 
-       let mut results = collection.aggregate(vec![filter,lookup_2]).await?;
+       let mut results = collection.aggregate(vec![filter,lookup_2, lookup_3, unwind]).await?;
        let mut posts:Vec<Post> = Vec::new();
        while let Some(result) = results.next().await{
            let data: Post= from_document(result?)?;
@@ -140,9 +166,21 @@ impl PostService {
                }
         };
 
+        let lookup_3 = doc! {
+            "$lookup":
+               {
+                  "from": "Profile",
+                  "localField": "user_name",
+                  "foreignField": "user_name",
+                  "as": "profile"
+               }
+        };
+        let unwind =   doc! {
+            "$unwind": "$profile"
+        };
         let filter = doc! {"$match":doc! {"id":id}};
 
-       let mut results = collection.aggregate(vec![filter,lookup_2]).await?;
+       let mut results = collection.aggregate(vec![filter,lookup_2, lookup_3, unwind]).await?;
        let mut post:Post = Post::default();
        while let Some(result) = results.next().await{
            let data: Post= from_document(result?)?;
