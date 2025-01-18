@@ -116,7 +116,7 @@ impl TriviaGameService {
     }
 
 
-    
+     
 
     pub async fn answer_question(db:&Database, ans:String,
         wallet_address:String, user_name:String,

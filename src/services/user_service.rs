@@ -2,6 +2,7 @@ use std::borrow::Borrow;
 use std::fs::File;
 use std::io::Read;
 use std::string::ToString;
+use std::vec;
 use handlebars::Handlebars;
 use mongodb::{Client, Database, options::ClientOptions};
 use mongodb::bson::{doc, Document};
@@ -15,9 +16,14 @@ use serde_json::{json, Value};
 
 use crate::database::db::db::DB;
 use crate::models::helper::EmailData;
+use crate::models::profile::{self, Profile};
 use crate::models::request_models::LoginReq;
 use crate::models::user::User;
+use crate::utils::general::get_current_time_stamp;
 use crate::utils::send_email::{ACTIVATE_EMAIL, get_body, send_email};
+
+use super::mongo_service::MongoService;
+use super::profile_service::PROFILE_COLLECTION;
 
 pub const USER_COLLECTION:&str = "User";
 
@@ -31,38 +37,70 @@ impl UserService{
         // Get a handle to a collection in the database.
         let collection = db.collection::<User>(USER_COLLECTION);
 
-        // let new_user = User{
-        //     id:None,
-        //     name:user.name
-        // };
-
-        //send email
-        // let mut file = File::open("html/activate.html").expect("File not found");
-        // let mut html_data = String::new();
-        // file.read_to_string(&mut html_data);
         let code:u32= 9384;
 
+        let mut  session = match db.client().start_session().await{
+            Ok(data)=>{data},
+            Err(err)=>{
+                log::error!("error creating database session {}", err);
+                return Err(err.into());
+            }
+        };
+        match session.start_transaction().await{
+            Ok(data)=>{},
+            Err(err)=>{
+                log::error!("error creating session transaction  {}", err);
+                return Err(err.into());   
+            }
+        };
 
-        // let name = user.name.as_str().to_string();
-        // 
-        // let mut reg = Handlebars::new();
-        // let order_email_content = reg.render_template (
-        //     include_str!("../utils/html/activate_new_account.hbs"),
-        //     &serde_json::json!({"name" :name, "code":code})).unwrap();
-        // 
-        // let email_data = EmailData{
-        //     subject:"Confirmation code".to_string(),
-        //     to: (*user.email).parse().unwrap(),
-        //     body: order_email_content
-        // };
-        // send_email(email_data);
-        // Insert data into db.
-        let res_user =collection.insert_one(user).await;
+        let user_collection = session.client().database(&MongoService::get_db_name()).collection::<User>(USER_COLLECTION);
+        let profile_collection = session.client().database(&MongoService::get_db_name()).collection::<Profile>(PROFILE_COLLECTION);
+
+        //
+
+        let res_user =user_collection.insert_one(user).await;
 
         let res_user = match res_user {
             Ok(res_user)=>{res_user},
-            Err(err)=>{return Err(err.into())}
+            Err(err)=>{
+                match session.abort_transaction().await{
+                    Ok(x)=>{},
+                    Err(err)=>{log::error!("abort error {}", err)}
+                };
+                return Err(err.into())
+            }
         };
+
+
+        // create profile 
+        let profile = Profile{
+            id : uuid::Uuid::new_v4().to_string(),
+            user_name: user.user_name.clone(), 
+            bio: "".to_string(), 
+            name: "".to_string(),
+            occupation: "".to_string(),
+            image:"".to_string(), 
+            created_at: get_current_time_stamp(),
+            updated_at: get_current_time_stamp(),
+            friends: vec![], 
+            friends_models: None,
+        
+        };
+        let res_profile =profile_collection.insert_one(profile).await;
+
+        match res_profile {
+            Ok(res_profile)=>{res_profile},
+            Err(err)=>{
+                match session.abort_transaction().await{
+                    Ok(x)=>{},
+                    Err(err)=>{log::error!("abort error {}", err)}
+                };
+                return Err(err.into())
+            }
+        };
+
+        session.commit_transaction().await;
         Ok(res_user)
     }
 

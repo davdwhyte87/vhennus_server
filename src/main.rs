@@ -198,12 +198,14 @@ async fn main() -> std::io::Result<()> {
                     )
                    
             )
-            .service(user_controller::create_user)
-            .service(user_controller::login_user)
-            .service(user_controller::kura_id_signup)
-            .service(user_controller::kura_id_login)
-            .service(user_controller::get_code)
+            // .service(user_controller::create_user)
+            // .service(user_controller::login_user)
+            // .service(user_controller::kura_id_signup)
+            // .service(user_controller::kura_id_login)
+            // .service(user_controller::get_code)
             .service(index)
+            .service(user_controller::create_account)
+            .service(user_controller::login)
             .service(system_controller::get_system_data)
             
 
