@@ -6,10 +6,11 @@ pub struct User {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
     pub user_name: String,
-    pub email:String,
+    pub email:Option<String>,
     pub code:Option<i32>,
     pub created_at:String,
-    pub user_type:UserType
+    pub user_type:UserType,
+    pub password_hash:String
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
