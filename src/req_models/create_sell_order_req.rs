@@ -22,7 +22,8 @@ pub struct CreateSellOrderReq{
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreatePostReq{
-    pub text:String
+    pub text:String,
+    pub image:Option<String>
 }
 
 

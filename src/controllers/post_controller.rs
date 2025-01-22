@@ -59,7 +59,7 @@ pub async fn create_post(
     };
 
     // post model
-    let new_post = Post{
+    let mut new_post = Post{
         id: Uuid::new_v4().to_string(),
         text: req.text.to_owned(),
         image: "".to_string(),
@@ -71,6 +71,10 @@ pub async fn create_post(
         number_of_views: 100,
         profile: None
     };
+    
+    if req.image.is_some(){
+        new_post.image = req.image.to_owned().unwrap()
+    }
 
 
     match PostService::create_post(&database.db, &new_post).await {
