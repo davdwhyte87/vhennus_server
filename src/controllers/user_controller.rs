@@ -108,7 +108,8 @@ pub async fn create_account(database:Data<MongoService>, new_user:Json<CreateUse
         code:None,
         user_type: new_user.into_inner().user_type,
         id:None,
-        password_hash: hashed_password
+        password_hash: hashed_password,
+        is_deleted:false
     };
 
     // check if user exists
@@ -204,6 +205,15 @@ pub async fn login(database:Data<MongoService>, req:Json<LoginReq>)->HttpRespons
             .json(resp_data)
         }
     };
+
+    // check if user has been deleted
+    if user.is_deleted {
+        resp_data.message = "This account is deleted".to_string();
+        resp_data.server_message = None;
+        resp_data.data = None;
+        return HttpResponse::BadRequest()
+            .json(resp_data) 
+    }
 
     
     let hashed_password = hash(req.password.clone(), DEFAULT_COST).unwrap();
