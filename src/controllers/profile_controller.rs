@@ -269,4 +269,46 @@ pub async fn update_profile(
 
 
 
+// delete my account
+#[get("/delete")]
+pub async fn delete_profile(
+    database:Data<MongoService>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+    let mut respData = GenericResp::<Profile>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: Some(Profile::default())
+    };
 
+    //claim
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    // delete account 
+    match ProfileService::delete_account(&database.db, claim.user_name.clone()).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            log::error!(" error deleting profile data  {}", err.to_string());
+            respData.message = "Error deleting profile data".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData) 
+        }
+    }
+
+    respData.message = "Your profile has been deleted successfully".to_string();
+    respData.server_message = None;
+    respData.data = None;
+    return HttpResponse::Ok().json(respData)
+
+}

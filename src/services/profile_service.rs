@@ -5,7 +5,9 @@ use futures::{future::OkInto, StreamExt, TryStreamExt};
 use mongodb::{bson::{doc, from_document, Regex}, results::{InsertOneResult, UpdateResult}, Database};
 use r2d2_mongodb::mongodb::coll;
 
-use crate::{models::{buy_order::BuyOrder, profile::Profile, sell_order::SellOrder}, utils::general::get_current_time_stamp};
+use crate::{models::{buy_order::BuyOrder, post::Post, profile::Profile, sell_order::SellOrder, user::User}, utils::general::get_current_time_stamp};
+
+use super::{mongo_service::MongoService, post_service::POST_SERVICE_COLLECTION, user_service::USER_COLLECTION};
 
 
 pub const PROFILE_COLLECTION:&str = "Profile";
@@ -196,5 +198,58 @@ impl ProfileService {
             }
         };
         Ok(res)
+    }
+
+
+    pub async  fn  delete_account(db:&Database, userName:String)->Result<(), Box<dyn Error>>{
+        
+        let mut  session = match db.client().start_session().await{
+            Ok(data)=>{data},
+            Err(err)=>{
+                log::error!("error creating database session {}", err);
+                return Err(err.into());
+            }
+        };
+        match session.start_transaction().await{
+            Ok(data)=>{},
+            Err(err)=>{
+                log::error!("error creating session transaction  {}", err);
+                return Err(err.into());   
+            }
+        };
+
+        let user_collection = session.client().database(&MongoService::get_db_name()).collection::<User>(USER_COLLECTION);
+        let profile_collection = session.client().database(&MongoService::get_db_name()).collection::<Profile>(PROFILE_COLLECTION);
+        let post_collection = session.client().database(&MongoService::get_db_name()).collection::<Post>(POST_SERVICE_COLLECTION);
+        // delete all posts
+        match post_collection.delete_many(doc! {"user_name": userName.clone()}).await{
+            Ok(_)=>{},
+            Err(err)=>{
+                log::error!("error deleting all posts .. {}", err);
+                match session.abort_transaction().await{
+                    Ok(x)=>{},
+                    Err(err)=>{log::error!("abort error {}", err)}
+                };
+            }
+        }
+
+        // update user document
+        match user_collection.update_one(doc! {"user_name":userName.clone()},
+         doc! {"$set":doc! {
+            "is_deleted":true
+         }}).await {
+            Ok(_)=>{},
+            Err(err)=>{
+                log::error!("error updating user document .. {}", err);
+                match session.abort_transaction().await{
+                    Ok(x)=>{},
+                    Err(err)=>{log::error!("abort error {}", err)}
+                }; 
+            }
+        }
+
+        // commit data changes
+        session.commit_transaction().await;
+        Ok(())
     }
 }

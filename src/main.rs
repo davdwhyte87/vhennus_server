@@ -172,6 +172,7 @@ async fn main() -> std::io::Result<()> {
                         .service(profile_controller::get_user_profile)
                         .service(profile_controller::get_friends)
                         .service(profile_controller::search)
+                        .service(profile_controller::delete_profile)
                     )
                     .service(
                         web::scope("user")
