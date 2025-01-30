@@ -152,7 +152,10 @@ pub async fn create_account(database:Data<MongoService>, new_user:Json<CreateUse
         }
     }
 
-    return HttpResponse::Ok().json({})
+    resp_data.message = "Ok".to_string();
+    resp_data.server_message = None;
+    resp_data.data = None;
+    return HttpResponse::Ok().json(resp_data)
 
 }
 
