@@ -146,16 +146,26 @@ pub async fn create_account(database:Data<MongoService>, new_user:Json<CreateUse
         let user_res = UserService::create_user(database.db.borrow(),&user).await;
 
         match user_res {
-            Ok(user)=> return HttpResponse::Ok().json({}),
-            Err(err)=>return HttpResponse::InternalServerError()
-                .json(Response{message:err.to_string()})
+            Ok(user)=> {
+                resp_data.message = "Ok".to_string();
+                resp_data.server_message = None;
+                resp_data.data = None;
+                return HttpResponse::Ok().json(resp_data)
+            },
+            Err(err)=>{
+                resp_data.message = "Error creating user".to_string();
+                resp_data.server_message = Some(err.to_string());
+                resp_data.data = None;
+                return HttpResponse::InternalServerError()
+                .json(resp_data)
+            }
         }
+    }else{
+        resp_data.message = "Wrong user type".to_string();
+        resp_data.server_message = None;
+        resp_data.data = None;
+        return HttpResponse::BadRequest().json(resp_data) 
     }
-
-    resp_data.message = "Ok".to_string();
-    resp_data.server_message = None;
-    resp_data.data = None;
-    return HttpResponse::Ok().json(resp_data)
 
 }
 
