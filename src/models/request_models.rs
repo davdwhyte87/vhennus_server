@@ -94,8 +94,7 @@ pub struct  CreateAccountDetailsReq{
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  CreateChatReq{
-
-    pub pair_id: String,
+    pub pair_id: Option<String>,
 
     pub receiver: String,
 

@@ -878,7 +878,7 @@ pub async fn send_friend_request(
         requester_profile: None
     };
 
-    match FriendRequestService::create_friend_request(&database.db, friend_request).await{
+    match FriendRequestService::create_friend_request(&database.db, friend_request.clone()).await{
         Ok(data)=>{data}, 
         Err(err)=>{
             respData.message = "Error creating friend request".to_string();
@@ -891,7 +891,11 @@ pub async fn send_friend_request(
             return HttpResponse::InternalServerError().json(respData);
         }
     };
-    return HttpResponse::Ok().json({});
+
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
+    respData.data = Some(friend_request);
+    return HttpResponse::Ok().json(respData);
 
 }
 
