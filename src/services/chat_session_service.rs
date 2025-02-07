@@ -60,7 +60,7 @@ pub async fn chat_ws_service(
                     // create chat
                     let mut chat = Chat{
                     id: uuid::Uuid::new_v4().to_string(),
-                    pair_id: req.pair_id.clone(),
+                    pair_id: if req.pair_id.is_some(){req.pair_id.clone().unwrap()} else{"".to_string()},
                     sender: user_id.clone(),
                     receiver: req.receiver.clone(),
                     message: "".to_string(),

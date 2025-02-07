@@ -77,11 +77,12 @@ impl ChatService {
                             user_name: chat.sender.clone(),
                             users_ids: vec![chat.sender.clone(), chat.receiver.clone()],
                             users: None,
-                            last_message: "".to_string(),
+                            last_message: chat.message.clone(),
                             all_read:true,
                             created_at: get_current_time_stamp(),
                             updated_at:get_current_time_stamp()
                         };
+                        // last read should be set in place...
                         match pair_collection.insert_one(chat_pair.clone()).await {
                             Ok(data)=>{
                                 chat_pair
