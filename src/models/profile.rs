@@ -21,5 +21,6 @@ pub struct Profile {
     pub created_at:String,
     pub updated_at:String,
     pub friends:Vec<String>,
-    pub friends_models:Option<Vec<Profile>>
+    pub friends_models:Option<Vec<Profile>>,
+    pub app_f_token: Option<String> // app firebase token
 }

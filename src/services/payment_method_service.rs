@@ -3,7 +3,7 @@
 use std::error::Error;
 
 use futures::StreamExt;
-use lettre::transport::smtp::commands::Data;
+// use lettre::transport::smtp::commands::Data;
 use mongodb::{bson::{doc, from_document}, results::InsertOneResult, Database};
 use r2d2_mongodb::mongodb::coll;
 

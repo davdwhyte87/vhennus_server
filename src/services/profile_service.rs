@@ -66,7 +66,8 @@ impl ProfileService {
                     image:"".to_string(),
                     updated_at: get_current_time_stamp(),
                     friends: vec![],
-                    friends_models: None
+                    friends_models: None,
+                    app_f_token: None
                 };
 
                 // create profile 
@@ -186,6 +187,7 @@ impl ProfileService {
             "occupation": profile.occupation.clone(),
             "image": profile.image.clone(),
             "updated_at": chrono::offset::Utc::now().to_string(),
+            "app_f_token": profile.app_f_token.clone()
            
         }};
         let res =collection.update_one(doc! {"user_name":profile.user_name.clone()}, update_data).await;

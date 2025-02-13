@@ -3,13 +3,15 @@ use std::sync::Arc;
 
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
 use actix_ws::{Message, ProtocolError, Session};
+use awc::Client;
 use dashmap::DashMap;
 use futures_util::{StreamExt, SinkExt};
 use mongodb::Database;
 use serde::{Deserialize, Serialize};
 
-use crate::{models::{chat::Chat, request_models::CreateChatReq}, services::chat_service::ChatService, utils::general::get_current_time_stamp};
-
+use crate::{models::{chat::Chat, request_models::CreateChatReq}, services::{app_notify::{send_app_notification, FcmMessage}, chat_service::ChatService, profile_service::ProfileService}, utils::general::get_current_time_stamp};
+use crate::services::app_notify::{MessagePayload, Notification};
+use crate::utils::strings_stuff::truncate_string;
 
 pub type UserConnections = Arc<DashMap<String, Session>>;
 
@@ -97,7 +99,43 @@ pub async fn chat_ws_service(
                         recipient_session.text(data_str).await.map_err(actix_web::error::ErrorInternalServerError)?;
                          // Forward message to recipient
                     } else {
-                        println!("Recipient {} not online", req.receiver);
+                        log::debug!("Recipient {} not online", req.receiver);
+                        // send notififcation
+
+                     
+
+                        // get users profile 
+                        let profile = match ProfileService::get_user_profile(database, res_chat.receiver.clone()).await{
+                            Ok(data)=>{data},
+                            Err(err)=>{
+                                log::error!("error getting profile {}", err.to_string());
+                                return Err(err.into())
+                            }
+                        };
+                        log::debug!("got profile :{}", profile.user_name.clone());
+                        // send notification if the user has a token
+                        if profile.app_f_token.is_some() {
+                            let payload = FcmMessage {
+                                message: MessagePayload {
+                                    token: profile.app_f_token.clone().unwrap(),
+                                    notification: Notification {
+                                        title: res_chat.receiver.clone(),
+                                        body: truncate_string(res_chat.message.clone()),
+                                    },
+                                    data: None,
+                                },
+                            };
+
+                            match send_app_notification(payload).await{
+                                Ok(_)=>{
+                                    log::debug!("Successfully sent app notification");
+                                },
+                                Err(err)=>{
+                                    log::error!("error sending app notification {}", err.to_string());
+                                    return Err(err.into())
+                                }
+                            }
+                        }   
                     }
                 }
             }

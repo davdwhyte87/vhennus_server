@@ -244,6 +244,9 @@ pub async fn update_profile(
     if req.name.is_some(){
         profile.name = req.name.clone().unwrap();
     }
+    if req.app_f_token.is_some(){
+        profile.app_f_token = Some(req.app_f_token.clone().unwrap());
+    }
 
     profile.user_name = claim.user_name.clone();
     profile.id = uuid::Uuid::new_v4().to_string();
