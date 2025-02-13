@@ -3,7 +3,7 @@ use std::{env, error, fmt};
 use actix_web::error::JsonPayloadError;
 use actix_web::{ get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
 use actix_web::web::{resource, route, service, Data, JsonConfig};
-
+use awc::Client;
 
 mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
@@ -24,7 +24,7 @@ mod services;
 use serde_json::json;
 use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
-use thiserror::Error;
+
 use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
@@ -102,6 +102,7 @@ async fn main() -> std::io::Result<()> {
         .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
             .route("/ws", web::get().to(chat_session_service::ws_chat)) 
             .app_data(db_data.clone())
+
             
             // USER CONTROLLERS
 

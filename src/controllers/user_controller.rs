@@ -30,7 +30,7 @@ use crate::services::user_service::UserService;
 use crate::services::wallet_service::WalletService;
 use crate::utils::auth::{Claims, decode_token, encode_token};
 use crate::utils::formatter;
-use crate::utils::send_email::send_email;
+// use crate::utils::send_email::send_email;
 
 
 #[get("/say_hello")]

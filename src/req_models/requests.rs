@@ -18,7 +18,8 @@ pub struct UpdateProfileReq{
     pub bio:Option<String>, 
     pub image:Option<String>, 
     pub name:Option<String>,
-    pub occupation:Option<String>
+    pub occupation:Option<String>,
+    pub app_f_token:Option<String>
 }
 
 

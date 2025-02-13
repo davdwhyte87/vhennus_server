@@ -5,7 +5,7 @@ use std::str::FromStr;
 use actix_web::{ get, post, web::{self, Data, ReqData}, HttpResponse};
 use actix_web_validator::Json;
 use bigdecimal::{num_bigint::BigInt, BigDecimal};
-use lettre::transport::smtp::response;
+// use lettre::transport::smtp::response;
 use mongodb::bson::doc;
 use serde::Deserialize;
 use uuid::Uuid;

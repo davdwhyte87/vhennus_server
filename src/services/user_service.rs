@@ -20,7 +20,7 @@ use crate::models::profile::{self, Profile};
 use crate::models::request_models::LoginReq;
 use crate::models::user::User;
 use crate::utils::general::get_current_time_stamp;
-use crate::utils::send_email::{ACTIVATE_EMAIL, get_body, send_email};
+// use crate::utils::send_email::{ACTIVATE_EMAIL, get_body, send_email};
 
 use super::mongo_service::MongoService;
 use super::profile_service::PROFILE_COLLECTION;
@@ -85,7 +85,7 @@ impl UserService{
             updated_at: get_current_time_stamp(),
             friends: vec![], 
             friends_models: None,
-        
+            app_f_token: None
         };
         let res_profile =profile_collection.insert_one(profile).await;
 

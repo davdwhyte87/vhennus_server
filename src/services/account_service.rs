@@ -20,7 +20,7 @@ use crate::models::account_details::AccountDetails;
 use crate::models::helper::EmailData;
 use crate::models::request_models::LoginReq;
 use crate::models::user::User;
-use crate::utils::send_email::{ACTIVATE_EMAIL, get_body, send_email};
+// use crate::utils::send_email::{ACTIVATE_EMAIL, get_body, send_email};
 
 const COLLECTION_NAME:&str = "Account Detail";
 
