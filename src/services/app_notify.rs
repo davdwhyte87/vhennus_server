@@ -56,8 +56,19 @@ pub async fn send_app_notification(payload: FcmMessage) -> Result<(), Box<dyn Er
 
     let serialized_payload = serde_json::to_string(&payload)?;
     let client = Client::default();
+    let mut fcm_url = FCM_URL;
+    let app_env = match env::var("APP_ENV"){
+        Ok(data)=>{data},
+        Err(err)=>{
+            "local".to_owned()
+        }
+    };
+
+    if app_env == "prod" {
+        fcm_url =  "https://fcm.googleapis.com/v1/projects/vhennus-916a0/messages:send"
+    }
     let response = client
-        .post(FCM_URL)
+        .post(fcm_url)
         .insert_header(("Authorization", format!("Bearer {}", access_token))) // Correct way to add Bearer token
         .insert_header(("Content-Type", "application/json")) // Required for FCM
         .send_body(serialized_payload) // Send the serialized struct as JSON
