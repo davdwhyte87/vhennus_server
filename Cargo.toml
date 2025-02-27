@@ -40,3 +40,4 @@ validator = {version ="0.18.1", features = ["derive"] }
 google-authenticator = "0.4.2"
 gcp_auth = "0.12.3"
 awc = { version = "3.5.1", features = ["rustls"] }
+diesel = { version = "2.2.7", features = ["postgres", "uuid", "chrono", "r2d2", "numeric"] }

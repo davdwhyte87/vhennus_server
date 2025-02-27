@@ -1,22 +1,23 @@
 use std::sync::Arc;
 use std::{env, error, fmt};
 use actix_web::error::JsonPayloadError;
-use actix_web::{ get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
+use actix_web::{get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
 use actix_web::web::{resource, route, service, Data, JsonConfig};
 use awc::Client;
 
 mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
-use controllers::trivia_game_controller::{self, get_todays_game};
+// use controllers::trivia_game_controller::{self, get_todays_game};
 use controllers::{
     buy_order_controller, chats_controller, order_message_controller, payment_method_controller, post_controller, profile_controller, sell_order_controller, system_controller, user_controller, wallet_controller
-
 };
 mod models;
 use dashmap::DashMap;
+use diesel::{PgConnection, RunQueryDsl};
+use diesel::r2d2::ConnectionManager;
 use dotenv::dotenv;
 use get_if_addrs::get_if_addrs;
-use log::{info, error, debug};
+use log::{debug, error, info};
 use models::{response, user};
 mod database;
 use database::db::db;
@@ -24,28 +25,42 @@ mod services;
 use serde_json::json;
 use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
-
+use crate::models::user::User;
+use crate::schema::users::dsl::users;
 use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
 mod middlewares;
-
-
-
+pub mod schema;
 
 
 #[get("/hello")]
 async fn index() -> impl Responder {
     "Hello, Bread!"
 }
-
+#[get("/db_test")]
+async fn db_test(pool: web::Data<DbPool>)-> impl Responder {
+    let conn = &mut pool.get().expect("Couldn't get DB connection");
+    match users.load::<User>(conn) {
+        Ok(users_list) => HttpResponse::Ok().json(users_list),
+        Err(_) => HttpResponse::InternalServerError().finish(),
+    }
+}
 // #[get("/{name}")]
 // async fn hello(name: web::Path<String>) -> impl Responder {
 //     format!("Hello {}!", &name)
 // }
 
-
-
+type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
+// Initialize the database pool
+fn init_db_pool() -> DbPool {
+    dotenv().ok();
+    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let manager = ConnectionManager::<PgConnection>::new(database_url);
+    r2d2::Pool::builder()
+        .build(manager)
+        .expect("Failed to create pool")
+}
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
@@ -95,11 +110,14 @@ async fn main() -> std::io::Result<()> {
 
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
+    let pool = init_db_pool();
+
 
     HttpServer::new(move|| {
 
         App::new()
-        .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+            .app_data(Data::new(pool.clone()))
+            .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
             .route("/ws", web::get().to(chat_session_service::ws_chat)) 
             .app_data(db_data.clone())
 
@@ -122,35 +140,35 @@ async fn main() -> std::io::Result<()> {
 
                     // sell order
 
-                    .service(
-                        web::scope("sell_order")
-                        .service(sell_order_controller::create_sell_order)
-                        .service(sell_order_controller::get_my_sell_orders)
-                        .service(sell_order_controller::get_single_sell_order)
-                        .service(sell_order_controller::cancel_sell_order)
-                        .service(sell_order_controller::update_sell_order)
-                        .service(sell_order_controller::get_all_open_sell_orders)
-                    )
-                    .service(
-                        web::scope("buy_order")
-                        .service(buy_order_controller::create_buy_order)
-                        .service(buy_order_controller::get_my_buy_orders)
-                        .service(buy_order_controller::get_single_buy_order)
-                        .service(buy_order_controller::buyer_confirmed)
-                        .service(buy_order_controller::seller_confirmed)
-                        .service(buy_order_controller::cancel_buy_order)
-                    )
-                    .service(
-                        web::scope("payment_method")
-                        .service(payment_method_controller::create_payment_method)
-                        .service(payment_method_controller::delete_payment_method)
-                        .service(payment_method_controller::get_my_payment_methods)
-                    )
-                    .service(
-                        web::scope("order_message")
-                        .service(order_message_controller::create_order_message)
-                        .service(order_message_controller::get_order_message)
-                    )
+                    // .service(
+                    //     web::scope("sell_order")
+                    //     .service(sell_order_controller::create_sell_order)
+                    //     .service(sell_order_controller::get_my_sell_orders)
+                    //     .service(sell_order_controller::get_single_sell_order)
+                    //     .service(sell_order_controller::cancel_sell_order)
+                    //     .service(sell_order_controller::update_sell_order)
+                    //     .service(sell_order_controller::get_all_open_sell_orders)
+                    // )
+                    // .service(
+                    //     web::scope("buy_order")
+                    //     .service(buy_order_controller::create_buy_order)
+                    //     .service(buy_order_controller::get_my_buy_orders)
+                    //     .service(buy_order_controller::get_single_buy_order)
+                    //     .service(buy_order_controller::buyer_confirmed)
+                    //     .service(buy_order_controller::seller_confirmed)
+                    //     .service(buy_order_controller::cancel_buy_order)
+                    // )
+                    // .service(
+                    //     web::scope("payment_method")
+                    //     .service(payment_method_controller::create_payment_method)
+                    //     .service(payment_method_controller::delete_payment_method)
+                    //     .service(payment_method_controller::get_my_payment_methods)
+                    // )
+                    // .service(
+                    //     web::scope("order_message")
+                    //     .service(order_message_controller::create_order_message)
+                    //     .service(order_message_controller::get_order_message)
+                    // )
                     .service(
                         web::scope("post")
                         .service(post_controller::create_post)
@@ -161,11 +179,11 @@ async fn main() -> std::io::Result<()> {
                         .service(post_controller::like_post)
                     )
 
-                    .service(
-                        web::scope("trivia")
-                        .service(trivia_game_controller::get_todays_game)  
-                        .service(trivia_game_controller::play_game)
-                    )
+                    // .service(
+                    //     web::scope("trivia")
+                    //     .service(trivia_game_controller::get_todays_game)  
+                    //     .service(trivia_game_controller::play_game)
+                    // )
                     .service(
                         web::scope("profile")
                         .service(profile_controller::update_profile)
@@ -173,7 +191,7 @@ async fn main() -> std::io::Result<()> {
                         .service(profile_controller::get_user_profile)
                         .service(profile_controller::get_friends)
                         .service(profile_controller::search)
-                        .service(profile_controller::delete_profile)
+                        
                     )
                     .service(
                         web::scope("user")
@@ -181,23 +199,22 @@ async fn main() -> std::io::Result<()> {
                         .service(user_controller::reject_friend_request)
                         .service(user_controller::send_friend_request)
                         .service(user_controller::get_my_friend_request)
+                            .service(user_controller::delete_profile)
                     )
                     .service(
                         web::scope("chat")
                         .service(chats_controller::create_chat)
                         .service(chats_controller::get_by_pair)
-                        .service(chats_controller::get_all_chats)
-                        .service(chats_controller::create_chat_pair)
                         .service(chats_controller::get_my_chat_pairs)
                         .service(chats_controller::find_chat_pair)
                         .route("/ws", web::get().to(chats_controller::we_chat_connect)) 
                     )
-                    .service(
-                        web::scope("circle")
-                        .service(chats_controller::create_group_chat)
-                        .service(chats_controller::get_circle)
-                        .service(chats_controller::get_group_chats)
-                    )
+                    // .service(
+                    //     web::scope("circle")
+                    //     .service(chats_controller::create_group_chat)
+                    //     .service(chats_controller::get_circle)
+                    //     .service(chats_controller::get_group_chats)
+                    // )
                    
             )
             // .service(user_controller::create_user)
@@ -209,6 +226,7 @@ async fn main() -> std::io::Result<()> {
             .service(user_controller::create_account)
             .service(user_controller::login)
             .service(system_controller::get_system_data)
+            .service(db_test)
             
 
             //

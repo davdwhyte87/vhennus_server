@@ -1,12 +1,16 @@
 
+use diesel::{AsChangeset, BoolExpressionMethods, Insertable, JoinOnDsl, OptionalExtension, PgTextExpressionMethods, QueryDsl, Queryable, Selectable};
 use std::{error::Error, vec};
-
+use chrono::NaiveDateTime;
+use diesel::{ExpressionMethods, RunQueryDsl};
 use futures::{future::OkInto, StreamExt, TryStreamExt};
 use mongodb::{bson::{doc, from_document, Regex}, results::{InsertOneResult, UpdateResult}, Database};
 use r2d2_mongodb::mongodb::coll;
-
-use crate::{models::{buy_order::BuyOrder, post::Post, profile::Profile, sell_order::SellOrder, user::User}, utils::general::get_current_time_stamp};
-
+use serde_derive::{Deserialize, Serialize};
+use crate::{models::{buy_order::BuyOrder, post::Post, profile::Profile, sell_order::SellOrder, user::User}, utils::general::get_current_time_stamp, DbPool};
+use crate::schema::friends::dsl::friends;
+use crate::schema::profiles::dsl::profiles;
+use crate::schema::profiles::user_name;
 use super::{mongo_service::MongoService, post_service::POST_SERVICE_COLLECTION, user_service::USER_COLLECTION};
 
 
@@ -16,242 +20,152 @@ pub struct  ProfileService{
 
 }
 
+#[derive(Serialize,Queryable, Debug, Deserialize, Clone)]
+pub struct MiniProfile{
+    pub user_name:String,
+    pub image: Option<String>,
+    pub bio:Option<String>,
+    pub name: Option<String>
+}
+#[derive(Debug, Serialize, Deserialize, Clone, Default, Queryable)]
+pub struct ProfileWithFriends{
+    pub id: String,
+    pub user_name:String,
+    pub bio: Option<String>,
+    pub name:Option<String>,
+    pub image:Option<String>,
+    pub created_at:NaiveDateTime,
+    pub updated_at:NaiveDateTime,
+    pub app_f_token: Option<String>,
+    friends: Vec<MiniProfile>
+}
 impl ProfileService {
-    pub async fn get_user_profile(db:&Database, user_name:String)->Result<Profile, Box<dyn Error>>{
-        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
-        let lookup_3 = doc! {
-            "$lookup":
-               {
-                  "from": "Profile",
-                  "localField": "friends",
-                  "foreignField": "user_name",
-                  "as": "friends_models"
-               }
-        };
 
-        let match_ = doc! {
-            "$match":{
-                "user_name": user_name.clone()
-            }
-        };
+    pub async fn get_profile(pool:&DbPool, xuser_name:String)->Result<Profile, Box<dyn Error>>{
+        let xpool = pool.clone();
 
-        let pipeline = vec![match_, lookup_3];
-        let mut res = match collection.aggregate(pipeline).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error fetching profile data  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
+        let result = actix_web::web::block(move||{
+            let mut conn = xpool.get().expect("Couldn't get DB connection");
+            let mut  conn2 =  xpool.get().expect("Couldn't get DB connection");
+            let profile = match profiles.filter(user_name.eq(&xuser_name)).first::<Profile>(&mut conn){
+                Ok(profile)=>{profile},
+                Err(err)=>{
+                    log::error!("error getting user profile, {}", err);
+                    return Err(err);
+                }
+            };
 
-        let mut profiles:Vec<Profile> = vec![];
-        while let Some(data) = res.try_next().await?{
-            let profile:Profile = from_document(data)?;
-            profiles.push(profile);
-        }
 
-        let profile = match profiles.get(0){
-            Some(data)=>{
-                return Ok(data.clone())
-            },
-            None=>{
-                // create 
-                let new_profile  = Profile{
-                    id: uuid::Uuid::new_v4().to_string(),
-                    user_name: user_name.clone(),
-                    bio: "".to_string(),
-                    name: "".to_string(),
-                    occupation: "".to_string(),
-                    created_at: get_current_time_stamp(),
-                    image:"".to_string(),
-                    updated_at: get_current_time_stamp(),
-                    friends: vec![],
-                    friends_models: None,
-                    app_f_token: None
-                };
+            return Ok(profile)
+        }).await??;
 
-                // create profile 
-                match collection.insert_one(new_profile.clone()).await{
-                    Ok(_)=>{},
-                    Err(err)=>{
-                        log::error!(" error creating profile data  {}", err.to_string());
-                        return Err(err.into()) 
-                    }
-                };
+        return Ok(result);
+    }
+    pub async fn get_profile_with_friend(pool:&DbPool, xuser_name:String)->Result<ProfileWithFriends, Box<dyn Error>>{
+        let xpool = pool.clone();
 
-                new_profile
-            }
-        };
-        
-        return Ok(profile)
+        let result = actix_web::web::block(move||{
+            let mut conn = xpool.get().expect("Couldn't get DB connection");
+            let mut  conn2 =  xpool.get().expect("Couldn't get DB connection");
+            let profile = match profiles.filter(user_name.eq(&xuser_name)).first::<Profile>(&mut conn){
+                Ok(profile)=>{profile},
+                Err(err)=>{
+                    log::error!("error getting user profile, {}", err);
+                    return Err(err);
+                }
+            };
+            use crate::schema::friends as fr;
+            use crate::schema::profiles as pr;
+            let friends_data = match friends.inner_join(profiles.on(fr::friend_username.eq(pr::user_name)))
+                .filter(fr::user_username.eq(&xuser_name))
+                .select(( user_name,pr::image, pr::bio, pr::name)).load::<MiniProfile>(&mut conn2){
+                Ok(data)=>{data},
+                Err(err)=>{
+                    log::error!("erro getting friends data {}", err);
+                    return Err(err);
+                }
+            };
+
+            return Ok(ProfileWithFriends{
+                id: profile.id,
+                user_name: profile.user_name,
+                bio: profile.bio,
+                name: profile.name,
+                image: profile.image,
+                created_at: profile.created_at,
+                updated_at: profile.updated_at,
+                app_f_token: profile.app_f_token,
+                friends: friends_data,
+            })
+        }).await??;
+
+        return Ok(result);
     }
 
+    pub async fn update_profile(pool:&DbPool, profile: Profile) -> Result<(), Box<dyn Error>> {
 
-    pub async fn search(db:&Database, data:String)->Result<Vec<Profile>, Box<dyn Error>>{
-        // let filter =  doc! { "user_name": { "$regex": data, "$options": "i" } };
-
-        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
-
-        let trimmed_data = data.trim();
-        //let escaped_data = regex::escape(trimmed_data);
-        let words: Vec<&str> = trimmed_data.split_whitespace().collect();
-        let regex_pattern = if words.is_empty() {
-            "".to_string()
-        } else {
-            words
-                .iter()
-                .map(|word| format!("(?=.*{})", regex::escape(word))) // Lookahead assertion
-                .collect::<String>()
-        };
-        let regex = Regex {
-            pattern: regex_pattern,
-            options: "i".to_string(),
-        };
-        let filter =doc! {
-            "$or": [
-                doc! { "user_name": { "$regex": &regex } },
-                doc! { "name": { "$regex": &regex } },
-            ]
-        };
-
-        let mut cursor = match collection.find(filter).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error fetching profile data  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
-        let mut profiles:Vec<Profile> = vec![];
-        while  let Some(data) = cursor.try_next().await? {  
-            profiles.push(data);
-        }
-
-        Ok(profiles)
-    }
-
-    pub async fn get_profile(db:&Database, user_name:String)->Result<Profile, Box<dyn Error>>{
-        // Get a handle to a collection in the database.
-        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
-
-        let profile = match collection.find_one(doc! {"user_name": user_name}).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error fetching profile data  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
-
-
-        match profile {
-            Some(data)=>{return Ok(data)},
-            None=>{
-                return Ok(Profile::default())
-            }
-        }
-    }
-
-    pub async fn update_profile(db:&Database, profile:&Profile)->Result<UpdateResult, Box<dyn Error>>{
-        // Get a handle to a collection in the database.
-        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
-
-
+        let xpool = pool.clone();
+        let mut conn = &mut pool.get().expect("Couldn't get DB connection");
         // get profile
-        
-        let ex_profile = match collection.find_one(doc! {"user_name":profile.user_name.clone()}).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error fetching profile data  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
-
-        match ex_profile{
-            Some(data)=>{},
-            None => {
-                // if  no profile exists, create one
-                
-                match collection.insert_one(profile).await{
-                    Ok(data)=>{data},
-                    Err(err)=>{
-                        log::error!(" error inserting profile data  {}", err.to_string());
-                        return Err(err.into())   
-                    }
-                };
-            }
-        };
-
-        // update profile
-        let update_data = doc! {"$set":doc! {
-            "bio":profile.bio.to_owned().clone(),
-            "name":profile.name.clone(),
-            "occupation": profile.occupation.clone(),
-            "image": profile.image.clone(),
-            "updated_at": chrono::offset::Utc::now().to_string(),
-            "app_f_token": profile.app_f_token.clone()
-           
-        }};
-        let res =collection.update_one(doc! {"user_name":profile.user_name.clone()}, update_data).await;
-
-        let res = match res {
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error updating into db  {}", err.to_string());
-                return Err(err.into())
-            }
-        };
-        Ok(res)
-    }
-
-
-    pub async  fn  delete_account(db:&Database, userName:String)->Result<(), Box<dyn Error>>{
-        
-        let mut  session = match db.client().start_session().await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!("error creating database session {}", err);
+        let uprofile = match profiles.filter(user_name.eq(profile.user_name.clone()))
+            .first::<Profile>(conn){
+            Ok(profile) => profile,
+            Err(err) => {
+                log::error!("error getting profile {}", err);
                 return Err(err.into());
             }
         };
-        match session.start_transaction().await{
-            Ok(data)=>{},
-            Err(err)=>{
-                log::error!("error creating session transaction  {}", err);
-                return Err(err.into());   
+        // update profile
+        let result = actix_web::web::block(move || {
+            let mut conn = &mut xpool.get().expect("Couldn't get DB connection");
+            match diesel::update(profiles.filter(user_name.eq(profile.user_name.clone())))
+                .set(&profile)
+                .execute(conn){
+                Ok(_) => {},
+                Err(err)=>{
+                    log::error!("error updating profile {}", err);
+                    return Err(err.to_string());
+                }
             }
-        };
+            Ok(())
+        }).await;
+        return Ok(())
+    }
 
-        let user_collection = session.client().database(&MongoService::get_db_name()).collection::<User>(USER_COLLECTION);
-        let profile_collection = session.client().database(&MongoService::get_db_name()).collection::<Profile>(PROFILE_COLLECTION);
-        let post_collection = session.client().database(&MongoService::get_db_name()).collection::<Post>(POST_SERVICE_COLLECTION);
-        // delete all posts
-        match post_collection.delete_many(doc! {"user_name": userName.clone()}).await{
-            Ok(_)=>{},
-            Err(err)=>{
-                log::error!("error deleting all posts .. {}", err);
-                match session.abort_transaction().await{
-                    Ok(x)=>{},
-                    Err(err)=>{log::error!("abort error {}", err)}
-                };
-            }
-        }
+    pub async fn search_users(pool: &DbPool, search_term: String) -> Result<Vec<MiniProfile>, Box<dyn std::error::Error>> {
+        let xpool = pool.clone();
+        let search_pattern = format!("%{}%", search_term);
 
-        // update user document
-        match user_collection.update_one(doc! {"user_name":userName.clone()},
-         doc! {"$set":doc! {
-            "is_deleted":true
-         }}).await {
-            Ok(_)=>{},
-            Err(err)=>{
-                log::error!("error updating user document .. {}", err);
-                match session.abort_transaction().await{
-                    Ok(x)=>{},
-                    Err(err)=>{log::error!("abort error {}", err)}
-                }; 
-            }
-        }
+        let users = actix_web::web::block(move || {
+            let mut conn = xpool.get().expect("Couldn't get DB connection");
+            use crate::schema::profiles as pr;
+            profiles
+                .filter(
+                    pr::user_name.ilike(&search_pattern)
+                        .or(pr::name.ilike(&search_pattern))
+                )
+                .select((pr::user_name, pr::image, pr::bio, pr::name))
+                .load::<MiniProfile>(&mut conn)
+        })
+            .await??;
 
-        // commit data changes
-        session.commit_transaction().await;
-        Ok(())
+        Ok(users)
+    }
+
+
+    pub async fn user_exists(pool: &DbPool, search_username: String) -> Result<bool, Box<dyn std::error::Error>> {
+        let xpool = pool.clone();
+
+        let result = actix_web::web::block(move || {
+            let mut conn = xpool.get().expect("Couldn't get DB connection");
+
+            profiles
+                .filter(user_name.eq(search_username))
+                .select(user_name) // Only select username to optimize performance
+                .first::<String>(&mut conn)
+                .optional() // Returns Some(String) if found, None if not
+        }).await??;
+
+        Ok(result.is_some()) // Returns true if user exists, false otherwise
     }
 }

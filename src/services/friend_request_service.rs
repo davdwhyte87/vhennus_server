@@ -1,276 +1,214 @@
 use std::error::Error;
-
+use chrono::NaiveDateTime;
+use diesel::RunQueryDsl;
 use futures::{future::ok, StreamExt, TryStreamExt};
 use mongodb::{bson::{doc, from_document}, Database};
 
-use crate::{models::{fried_request::{FriendRequest, FriendRequestStatus}, profile::Profile}, utils::general::get_current_time_stamp};
-
+use crate::{models::{fried_request::{FriendRequest, FriendRequestStatus}, profile::Profile}, utils::general::get_current_time_stamp, DbPool};
+use crate::schema::friend_requests::dsl::friend_requests;
 use super::{mongo_service::MongoService, profile_service::PROFILE_COLLECTION};
+use diesel::prelude::*;
+use crate::database::db::db::DB;
+use crate::schema::friend_requests::{id, requester, status, user_name};
+use crate::schema::profiles::dsl::profiles;
+use crate::schema::{friend_requests as fr, friends};
+use crate::schema::profiles as p;
+use crate::services::user_service::UserService;
+use diesel::result::Error as DieselError;
+use serde_derive::Serialize;
+use crate::models::profile::Friend;
 
 pub const FRIEND_REQUEST_COLLECTION:&str = "FriendRequest";
 
 pub struct  FriendRequestService{
 
 }
+#[derive(Queryable, Default, Serialize)]
+pub struct FriendRequestWithProfile{
+    pub id: String,
+    pub user_name: String,
+    pub requester:String,
+    pub status:String,
+    pub created_at: NaiveDateTime,
+    pub bio:Option<String>,
+    pub name:Option<String>,
+    pub image:Option<String>,
+}
 
 impl FriendRequestService {
 
 
-
-    pub async fn get_user_friend_request(db:&Database, user_name:String)->Result<Vec<FriendRequest>, Box<dyn Error>>{
-        // Get a handle to a collection in the database.
-        let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
-
-        let lookup_2 = doc! {
-            "$lookup":
-               {
-                  "from": "Profile",
-                  "localField": "requester",
-                  "foreignField": "user_name",
-                  "as": "requester_profile"
-               }
-        };
-        let unwind = doc! {
-            "$unwind": {
-                "path": "$requester_profile",
-                "preserveNullAndEmptyArrays": true
+    pub async fn get_user_friend_request(pool:&DbPool, other_user_name:String)->Result<Vec<FriendRequestWithProfile>, Box<dyn Error>>{
+        let conn = &mut pool.get().expect("Couldn't get DB connection");
+        match friend_requests.inner_join(profiles.on(requester.eq(other_user_name.clone()).and(status.eq("PENDING")))).select((
+            fr::id, fr::user_name, fr::requester, fr::status, fr::created_at,
+            p::bio, p::name, p::image
+            )).load::<FriendRequestWithProfile>(conn){
+            Ok(data) => {
+                return Ok(data);
             }
-        };
-
-        let filter = doc! {"$match":doc! {"user_name":user_name.clone(), "status":FriendRequestStatus::PENDING.to_string()}}; 
-        let mut results = match collection.aggregate(vec![filter,lookup_2, unwind]).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error fetching friend request data  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
-
-        let mut requests:Vec<FriendRequest> = vec![];
-
-
-        while let Some(request) = results.try_next().await?{
-            // log::error!("document {}", request);
-            let x:FriendRequest = match from_document(request){
-
-                Ok(data)=>{
-                    data
-                },
-                Err(err)=>{
-                    log::error!(" error converting document to friend request  {}", err.to_string());
-                    return Err(err.into())   
-                }
-            };
-            requests.push(x);
-        }
-
-        Ok(requests)
-    }
-
-    
-    pub async fn get_single_friend_request(db:&Database, id:String)->Result<Option<FriendRequest>, Box<dyn Error>>{
-        // Get a handle to a collection in the database.
-        let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
-
-        let mut res = match collection.find_one(doc! {"id": id}).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error fetching friend request data  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
-       
-
-        Ok(res)
-    }
-
-
-    pub async fn create_friend_request(db:&Database, request:FriendRequest)->Result<(),Box<dyn Error>>{
-        let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
-
-        // check if there is already a friend request 
-        let filter = doc! {
-            "user_name": request.user_name.clone(),
-            "requester": request.requester.clone()
-        };
-
-        let fr = match collection.find_one(filter).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error error geting friend request {}", err.to_string());
-                return Err(err.into())  
-            }
-        };
-
-        match fr {
-            Some(_)=>{
-                return Err(Box::from("FRIEND_REQUEST_EXISTS")); 
-            },
-            None=>{
-
-            }
-        }
-        
-        let res = match collection.insert_one(request).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error inserting freind request  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
-
-        Ok(())
-    }
-
-
-    pub async fn delete_friend_request(db:&Database, id:String)->Result<(), Box<dyn Error>>{
-        let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
-
-        let res = match collection.delete_one(doc! {"id":id}).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error deleting freind request  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
-
-        Ok(())
-    }
-
-    
-    pub async fn accept_friend_request(db:&Database, mut request:FriendRequest)->Result<(),Box<dyn Error>>{
-        log::debug!("accept FR service starting ...");
-        //let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
-        let mut  session = match db.client().start_session().await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!("error creating database session {}", err);
+            Err(err) => {
+                log::error!("error getting friend requests .. {}", err);
                 return Err(err.into());
             }
         };
- 
-        match session.start_transaction().await{
+    }
+
+    
+    // pub async fn get_single_friend_request(db:&Database, id:String)->Result<Option<FriendRequest>, Box<dyn Error>>{
+    //     // Get a handle to a collection in the database.
+    //     let collection = db.collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
+    //
+    //     let mut res = match collection.find_one(doc! {"id": id}).await{
+    //         Ok(data)=>{data},
+    //         Err(err)=>{
+    //             log::error!(" error fetching friend request data  {}", err.to_string());
+    //             return Err(err.into())
+    //         }
+    //     };
+    //
+    //
+    //     Ok(res)
+    // }
+
+
+    pub async fn create_friend_request(pool:&DbPool, request:FriendRequest)->Result<(),Box<dyn Error>>{
+        // check if the user exists
+        match UserService::get_by_username(pool, request.user_name.clone()).await{
+            Ok(user) => {},
+            Err(err) => {
+                log::error!("error getting  user  .. {}", err);
+                return Err(err.into());
+            }
+        };
+        match UserService::get_by_username(pool, request.requester.clone()).await{
+            Ok(user) => {},
+            Err(err) => {
+                log::error!("error getting  user  .. {}", err);
+            }
+        };
+        let xpool = pool.clone();
+        let mut conn = xpool.get().expect("Couldn't get DB connection");
+
+        let result = actix_web::web::block(move||{
+            diesel::insert_into(friend_requests).values(&request).execute(&mut conn)
+        }).await;
+        match result {
             Ok(data)=>{},
             Err(err)=>{
-                log::error!("error creating session transaction  {}", err);
-                return Err(err.into());   
+                log::error!("error saving friend requests .. {}", err);
+                return Err(err.into());
             }
-        };
-
-        
-        let fr_collection = session.client().database(&MongoService::get_db_name()).collection::<FriendRequest>(FRIEND_REQUEST_COLLECTION);
-        let profile_collection = session.client().database(&MongoService::get_db_name()).collection::<Profile>(PROFILE_COLLECTION);
-        request.status = FriendRequestStatus::ACCEPTED;
-        let update_data = doc! {
-            "$set":doc! {
-                "status":request.status.to_string(),
-            }
-        };
-        // update the request 
-        let res = match fr_collection.update_one(doc! {"id":request.id.clone()},update_data).session(&mut session).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error inserting freind request  {}", err.to_string());
-                session.abort_transaction().await;
-                return Err(err.into())   
-            }
-        };
-
-        // get requester profile 
-        let mut req_profile = match profile_collection.find_one(doc! {"user_name":request.requester.clone()}).await{
-            Ok(data)=>{
-                match data{
-                    Some(data)=>{data},
-                    None=>{
-                       // create a profile 
-                       let mut re = Profile::default();
-                       re.id = uuid::Uuid::new_v4().to_string();
-                       re.created_at = get_current_time_stamp();
-                       re.updated_at = get_current_time_stamp();
-                       re.user_name = request.requester.clone();
-                       re.friends = vec![request.user_name.clone()];
-                       match profile_collection.insert_one(&re).await {
-                        Ok(_)=>{},
-                        Err(err)=>{
-                            log::error!(" error creating requester profile  {}", err.to_string());
-                            session.abort_transaction().await;
-                            return Err(err.into())      
-                        }
-                       }
-                       re
-                    }
-                }
-            },
-            Err(err)=>{
-                log::error!(" error getting user profile  {}", err.to_string());
-                session.abort_transaction().await;
-                return Err(err.into())   
-            }
-        };
-        //get profile
-        let mut profile = match profile_collection.find_one(doc! {"user_name":request.user_name.clone()}).await{
-            Ok(data)=>{
-                match data{
-                    Some(data)=>{data},
-                    None=>{
-                        log::error!(" error getting user profile, no profile found");
-                        session.abort_transaction().await;
-                        return Err(Box::from("no user found"))    
-                    }
-                }
-            },
-            Err(err)=>{
-                log::error!(" error getting user profile  {}", err.to_string());
-                session.abort_transaction().await;
-                return Err(err.into())   
-            }
-        };
-        //add friend to friend list
-
-        if !profile.friends.contains(&request.requester) {
-            profile.friends.push(request.requester);
         }
-       
-        let profile_update_data = doc! {
-            "$set":doc! {
-                "friends":profile.friends,
-            }
-        };
-
-        log::debug!("1 {:?}", req_profile.friends.clone());
-        if !req_profile.friends.contains(&request.user_name){
-            req_profile.friends.push(request.user_name.clone());
-        }
-
-        let req_profile_update_data = doc! {
-            "$set":doc! {
-                "friends":req_profile.friends.clone(),
-            }
-        };
-        let res = match profile_collection.update_one(doc! {"user_name":profile.user_name.clone()},profile_update_data).session(&mut session).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error inserting freind request  {}", err.to_string());
-                session.abort_transaction().await;
-                return Err(err.into())   
-            }
-        };
-        // update requester 
-        log::debug!("{:?}", req_profile_update_data);
-        let res = match profile_collection.update_one(doc! {"user_name":req_profile.user_name.clone()},req_profile_update_data).session(&mut session).await{
-            Ok(data)=>{
-                log::debug!("{:?}", req_profile.user_name);
-            },
-            Err(err)=>{
-                log::error!(" error inserting freind request  {}", err.to_string());
-                session.abort_transaction().await;
-                return Err(err.into())   
-            }
-        };
-        session.commit_transaction().await;
+        // create friend request
         Ok(())
+    }
+    
+    pub async fn reject_friend_request(pool:&DbPool, frid:String, owner_username:String)->Result<(),Box<dyn Error>>{
+        let xpool = pool.clone();
+        let res =actix_web::web::block(move||{
+            let conn = &mut xpool.get().expect("Couldn't get DB connection");
+            let upd = match diesel::update(friend_requests.filter(fr::id.eq(frid)))
+                .set(status.eq("REJECTED"))
+                .execute(conn){
+                Ok(_) => {},
+                Err(err) => {
+                    log::error!("error updating friend requests .. {}", err);
+                    return Err(err.to_string());
+                }
+            };
+            Ok(())
+        }).await;
+        match res {
+            Ok(data)=>{
+                return Ok(());
+            }
+            Err(err)=>{
+                log::error!("error rejecting friend request ... {}", err);
+                return Err(err.into());
+            }
+        }
     }
 
 
+    pub async fn delete_friend_request(pool:&DbPool, request_id:String)->Result<(), Box<dyn Error>>{
+        let conn = &mut pool.get().expect("Couldn't get DB connection");
+
+        let deleted = match diesel::delete(friend_requests.filter(id.eq(request_id))).execute(conn){
+            Ok(data)=>{
+                if data == 0 {
+                    return Err(Box::new(diesel::result::Error::NotFound));
+                }
+            },
+            Err(err)=>{
+                log::error!("error deleting friend request .. {}", err);
+                return Err(err.into())
+            }
+        };
+        Ok(())
+    }
+
+    
+    pub async fn accept_friend_request(pool:&DbPool, request_id:String, owner_user_name:String)->Result<(),Box<dyn Error>> {
+       let xpool = pool.clone();
+        let res = actix_web::web::block(move||{
+            let mut conn = &mut xpool.get().expect("Couldn't get DB connection");
+            let request = match friend_requests.filter(id.eq(request_id.clone())).first::<FriendRequest>(conn){
+                Ok(data)=>{data},
+                Err(err)=>{
+                    log::error!("error getting friend request .. {}", err);
+                    return Err(err.to_string());
+                }
+            };
+            
+            // check if the req owner is the one who owns the friend request
+            if request.user_name.clone() != owner_user_name{
+                return Err("UNAUTHORIZED".parse().unwrap());
+            }
+
+            use crate::schema::friend_requests;
+            // update fr
+            let result: Result<(), DieselError> = conn
+                .transaction(|conn| {
+                    match diesel::update(friend_requests.filter(id.eq(request_id)))
+                        .set(friend_requests::status.eq("ACCEPTED"))
+                        .execute(conn){
+                        Ok(_) => {},
+                        Err(err) => {
+                            log::error!("error updating friend request .. {}", err);
+                            return Err(err.into());
+                        }
+                    };
+
+                    // create friend 
+                    let friend = Friend{
+                        id: 0,
+                        user_username: request.user_name.clone(),
+                        friend_username: request.requester.clone()
+                    };
+                    match diesel::insert_into(friends::table).values(&friend)
+                        .execute(conn){
+                        Ok(_) => {},
+                        Err(err) => {
+                            log::error!("error creating friend .. {}", err);
+                            return Err(err.into());
+                        }
+                    };
+                    return Ok(())
+                });
+
+            return Ok(())
+        }).await;
+        
+        
+        match res{
+            Ok(_)=>{},
+            Err(err)=>{
+                log::error!("error accepting friend request .. {}", err);
+                return Err(err.into());
+            }
+        }
+        Ok(())
+    }
 
 }

@@ -6,14 +6,14 @@ use bigdecimal::BigDecimal;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{models::{payment_method::{PaymentMethod, PaymentMethodData}, response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}, system::System}, req_models::{create_payment_method_req::CreatePaymentMethodReq, create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}}, services::{mongo_service::MongoService, payment_method_service::PaymentMethodService, sell_order_service::SellOrderService, system_service::SystemService}, utils::auth::Claims};
+use crate::{models::{payment_method::{PaymentMethod, PaymentMethodData}, response::{GenericResp, Response}, sell_order::{self, Currency, SellOrder}, system::System}, req_models::{create_payment_method_req::CreatePaymentMethodReq, create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}}, services::{mongo_service::MongoService, payment_method_service::PaymentMethodService, sell_order_service::SellOrderService, system_service::SystemService}, utils::auth::Claims, DbPool};
 
 
 
 #[get("/get_system_data")]
 pub async fn get_system_data(
 
-    database:Data<MongoService>
+    pool:Data<DbPool>
 )->HttpResponse{
     let mut respData = GenericResp::<System>{
         message:"".to_string(),
@@ -22,7 +22,7 @@ pub async fn get_system_data(
     };
 
     // get system data from db
-    let data = match SystemService::get_system_data(&database.db).await{
+    let data = match SystemService::get_system_data(&pool).await{
         Ok(data)=>{data},
         Err(err)=>{
             log::error!(" error getting system data  {}", err.to_string());

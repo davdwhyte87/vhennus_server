@@ -26,3 +26,4 @@ pub mod fried_request;
 pub mod chat;
 pub mod circle;
 pub mod chat_pair;
+mod likes;

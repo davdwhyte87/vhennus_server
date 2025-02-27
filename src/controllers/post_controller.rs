@@ -8,14 +8,13 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use validator::{Validate, ValidationErrors};
 
-use crate::{controllers::buy_order_controller::escrow_to_user, models::{comment::Comment, payment_method::PaymentMethod, post::Post, request_models::TransferReq, response::{ GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{ CreateCommentReq, CreatePostReq, CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, post_service::PostService, sell_order_service::SellOrderService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
-
-
-
+use crate::{controllers::buy_order_controller::escrow_to_user, models::{comment::Comment, payment_method::PaymentMethod, post::Post, request_models::TransferReq, response::{GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateCommentReq, CreatePostReq, CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, post_service::PostService, sell_order_service::SellOrderService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}, DbPool};
+use crate::services::post_service::{PostFeed, PostWithComments};
+use crate::utils::general::get_time_naive;
 
 #[post("/create")]
 pub async fn create_post(
-    database:Data<MongoService>,
+    pool:Data<DbPool>,
      req: Result<web::Json<CreatePostReq>, actix_web::Error>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -62,22 +61,18 @@ pub async fn create_post(
     let mut new_post = Post{
         id: Uuid::new_v4().to_string(),
         text: req.text.to_owned(),
-        image: "".to_string(),
-        created_at: chrono::offset::Utc::now().to_string(),
+        image: None,
+        created_at: get_time_naive(),
+        updated_at: get_time_naive(),
         user_name:claim.user_name.to_owned(),
-        likes : vec![],
-        comments_ids: vec![],
-        comments: None,
-        number_of_views: 100,
-        profile: None
     };
     
     if req.image.is_some(){
-        new_post.image = req.image.to_owned().unwrap()
+        new_post.image = Some(req.image.to_owned().unwrap())
     }
 
 
-    match PostService::create_post(&database.db, &new_post).await {
+    match PostService::create_post(&pool, new_post).await {
         Ok(_)=>{},
         Err(err)=>{
             log::error!(" error creating post {}", err.to_string());
@@ -91,7 +86,7 @@ pub async fn create_post(
 
     respData.message = "".to_string();
     respData.server_message = None;
-    respData.data = Some(new_post);
+    respData.data = None;
     return HttpResponse::Ok().json( respData);
 }
 
@@ -99,11 +94,11 @@ pub async fn create_post(
 
 #[get("/all")]
 pub async fn get_all_posts(
-    database:Data<MongoService>,
+    pool:Data<DbPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
 
-    let mut respData = GenericResp::<Vec<Post>>{
+    let mut respData = GenericResp::<Vec<PostFeed>>{
         message:"".to_string(),
         server_message: Some("".to_string()),
         data: None
@@ -122,7 +117,7 @@ pub async fn get_all_posts(
         }
     };
 
-    let posts = match PostService::get_all_post(&database.db).await{
+    let posts = match PostService::get_all_post(&pool).await{
         Ok(data)=>{data},
         Err(err)=>{
             log::error!(" error getting posts {}", err.to_string());
@@ -143,11 +138,11 @@ pub async fn get_all_posts(
 
 #[get("/allmy")]
 pub async fn get_my_posts(
-    database:Data<MongoService>,
+    pool:Data<DbPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
 
-    let mut respData = GenericResp::<Vec<Post>>{
+    let mut respData = GenericResp::<Vec<PostFeed>>{
         message:"".to_string(),
         server_message: Some("".to_string()),
         data: None
@@ -166,7 +161,7 @@ pub async fn get_my_posts(
         }
     };
 
-    let posts = match PostService::get_all_my_posts(&database.db, claim.user_name.clone()).await{
+    let posts = match PostService::get_all_my_posts(&pool, claim.user_name.clone()).await{
         Ok(data)=>{data},
         Err(err)=>{
             log::error!(" error getting posts {}", err.to_string());
@@ -247,12 +242,12 @@ pub async fn create_comment(
 
 #[get("/single/{id}")]
 pub async fn get_single_posts(
-    database:Data<MongoService>,
+    pool:Data<DbPool>,
     claim:Option<ReqData<Claims>>,
     path:web::Path<GetSinglePostPath>
 )->HttpResponse{
 
-    let mut respData = GenericResp::<Post>{
+    let mut respData = GenericResp::<PostWithComments>{
         message:"".to_string(),
         server_message: Some("".to_string()),
         data: None
@@ -271,7 +266,7 @@ pub async fn get_single_posts(
         }
     };
 
-    let posts = match PostService::get_single_post(&database.db, path.id.to_owned()).await{
+    let posts = match PostService::get_single_post(&pool, path.id.to_owned()).await{
         Ok(data)=>{data},
         Err(err)=>{
             log::error!(" error getting post {}", err.to_string());
@@ -281,12 +276,10 @@ pub async fn get_single_posts(
             return HttpResponse::BadRequest().json( respData);
         }
     };
-
     respData.message = "".to_string();
     respData.server_message = None;
     respData.data = Some(posts);
     return HttpResponse::Ok().json( respData);
-    
 }
 
 
