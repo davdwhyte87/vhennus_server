@@ -1,18 +1,13 @@
+use crate::models::chat::Chat;
+use crate::models::chat_pair::ChatPair;
 use std::error::Error;
-use diesel::{BoolExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use futures::{StreamExt, TryStreamExt};
 use mongodb::{bson::doc, Database};
-
-use crate::{models::{chat::Chat, chat_pair::ChatPair, user::{self, User}}, utils::general::get_current_time_stamp, DbPool};
-use crate::schema::chat_pairs::dsl::chat_pairs;
-use crate::schema::chat_pairs::{user1, user2};
-use crate::schema::users::dsl::users;
+use sqlx::PgPool;
 use crate::services::profile_service::ProfileService;
-use super::{chat_pair_service::CHAT_PAIR_COLLECTION, user_service::USER_COLLECTION};
-use diesel::prelude::*;
 use uuid::Uuid;
-use crate::schema::chats::dsl::chats;
-use crate::schema::chats::pair_id;
+use crate::services::chat_pair_service::ChatPairService;
+use crate::utils::general::get_time_naive;
 
 pub const CHAT_COLLECTION:&str = "Chat";
 
@@ -21,73 +16,51 @@ pub struct  ChatService{
 }
 
 impl ChatService {
-    pub async fn create_chat(pool:&DbPool, chat:Chat)->Result<Chat, Box<dyn Error>>{
+    pub async fn create_chat(pool:&PgPool, chat:Chat)->Result<Chat, Box<dyn Error>>{
         let xpool = pool.clone();
         // check that the users exist
-        ProfileService::user_exists(pool, chat.sender.clone()).await?;
-        ProfileService::user_exists(pool, chat.receiver.clone()).await?;
+        ProfileService::user_exists(pool, &*chat.sender.clone()).await?;
+        ProfileService::user_exists(pool, &*chat.receiver.clone()).await?;
         
-        let mut chat = chat.clone();
-        // get the chat pair
-        let result = actix_web::web::block(move || {
-            let mut conn = xpool.get().expect("Couldn't get DB connection");
-            let mut conn2 = xpool.get().expect("Couldn't get DB connection");
-            let mut conn3 = xpool.get().expect("Couldn't get DB connection");
-            let chat_pairs_data = match chat_pairs
-                .filter(
-                    (user1.eq(&chat.sender).and(user2.eq(&chat.receiver)))
-                        .or(user1.eq(&chat.receiver).and(user2.eq(&chat.sender)))
-                )
-                .first::<ChatPair>(&mut conn)
-                .optional(){
-                Ok(data)=>{data},
-                Err(err)=>{
-                    return Err(Box::new(err));
-                }
+        // get chat pair 
+        let chat_pair = sqlx::query_as!(ChatPair, "
+            SELECT * FROM chat_pairs WHERE user1 = $1 AND user2 = $2 OR user1 = $2 AND user2 =$1
+            " , chat.sender.clone(), chat.receiver.clone())
+            .fetch_optional(pool).await?;
+        let mut chat_pair_id = "".to_string();
+        if chat_pair.is_some() {
+            chat_pair_id = chat_pair.unwrap().id;
+        }else{
+            chat_pair_id = Uuid::new_v4().to_string();
+            let chat_pair = ChatPair{
+                id: chat_pair_id.clone(),
+                user1: chat.sender.clone(),
+                user2: chat.receiver.clone(),
+                last_message: None,
+                all_read: false,
+                created_at: get_time_naive(),
+                updated_at: get_time_naive(),
             };
-            let mut chat_pair_id:String;
-            if chat_pairs_data.is_none() {
-                // create chat pair that means its a new chatu
-                use crate::schema::chat_pairs as schat_pairs;
-                let new_chat_pair = ChatPair{
-                    id: Uuid::new_v4().to_string(),
-                    user1: chat.sender.clone(),
-                    user2: chat.receiver.clone(),
-                    last_message: Some(chat.message.clone()),
-                    all_read: false,
-                    created_at: Default::default(),
-                    updated_at: Default::default(),
-                };
-                match diesel::insert_into(schat_pairs::table).values(&new_chat_pair)
-                    .execute(&mut conn2){
-                    Ok(data)=>{},
-                    Err(err)=>{
-                        return Err(Box::new(err));
-                    }
-                }
-                chat_pair_id=new_chat_pair.id;
-            }else{
-                chat_pair_id = chat_pairs_data.unwrap().id;
-                
-            }
-            
-            // create new chat
-            chat.pair_id = chat_pair_id.clone();
-            chat.id = Uuid::new_v4().to_string();
-            
-            use crate::schema::chats as schats;
-            
-            match diesel::insert_into(schats::table).values(&chat)
-                .execute(&mut conn3){
-                Ok(data)=>{},
-                Err(err)=>{
-                    return Err(Box::new(err));
-                }
-            };
-            return Ok(chat);
-
-        }).await??;
-
+            ChatPairService::create_chat_pair(pool, &chat_pair).await?;
+        }
+        
+        // construct new chat 
+        let mut chat = chat;
+        chat.id =  Uuid::new_v4().to_string();
+        chat.pair_id = chat_pair_id;
+        chat.created_at = get_time_naive();
+        chat.updated_at = get_time_naive();
+        
+        let result  = chat.clone();
+        
+        //create chat 
+        let res = sqlx::query_as!(Chat, "
+            INSERT INTO chats (id,sender,receiver,message, image,created_at,updated_at, pair_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            ", chat.id,chat.sender, chat.receiver,chat.message,chat.image
+            ,chat.created_at,chat.updated_at,chat.pair_id)
+            .execute(pool).await?;
+        
         Ok(result)
     }
 
@@ -127,21 +100,10 @@ impl ChatService {
     //     Ok(chats)
     // }
 
-    pub async fn get_chats_by_pair_id(pool:&DbPool, id:String)->Result<Vec<Chat>, Box<dyn Error>>{
-        let xpool = pool.clone();
-        
-        let result = actix_web::web::block(move || {
-            let mut conn = xpool.get().expect("Couldn't get DB connection");
-            use crate::schema::chats as schats;
-            let chats_data =match chats.filter(pair_id.eq(id)).load::<Chat>(&mut conn){
-                Ok(data)=>{data},
-                Err(err)=>{
-                    return Err(Box::new(err));
-                }
-            };
-            return Ok(chats_data);
-        }).await??;
-        
-        Ok(result)
+    pub async fn get_chats_by_pair_id(pool:&PgPool, id:String)->Result<Vec<Chat>, Box<dyn Error>>{
+        let chats = sqlx::query_as!(Chat, "
+            SELECT * FROM chats WHERE pair_id = $1", id)
+            .fetch_all(pool).await?;
+        Ok(chats)
     }
 }

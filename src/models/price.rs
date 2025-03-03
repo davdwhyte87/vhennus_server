@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::{default, string::ToString};
 use strum_macros;
 
-use super::{buy_order::BuyOrder, comment::Comment, payment_method::{PaymentMethod, PaymentMethodData}, user::UserType};
 
 
 

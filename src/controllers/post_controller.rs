@@ -5,16 +5,17 @@ use actix_web_validator::Json;
 use bigdecimal::{num_bigint::BigInt, BigDecimal};
 use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use uuid::Uuid;
 use validator::{Validate, ValidationErrors};
 
-use crate::{controllers::buy_order_controller::escrow_to_user, models::{comment::Comment, payment_method::PaymentMethod, post::Post, request_models::TransferReq, response::{GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateCommentReq, CreatePostReq, CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, post_service::PostService, sell_order_service::SellOrderService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}, DbPool};
+use crate::{controllers::buy_order_controller::escrow_to_user, models::{comment::Comment, payment_method::PaymentMethod, post::Post, request_models::TransferReq, response::{GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateCommentReq, CreatePostReq, CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, post_service::PostService, sell_order_service::SellOrderService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
 use crate::services::post_service::{PostFeed, PostWithComments};
 use crate::utils::general::get_time_naive;
 
 #[post("/create")]
 pub async fn create_post(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
      req: Result<web::Json<CreatePostReq>, actix_web::Error>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -94,7 +95,7 @@ pub async fn create_post(
 
 #[get("/all")]
 pub async fn get_all_posts(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
 
@@ -138,7 +139,7 @@ pub async fn get_all_posts(
 
 #[get("/allmy")]
 pub async fn get_my_posts(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
 
@@ -187,7 +188,7 @@ struct GetSinglePostPath {
 
 #[post("/{id}/comment/create")]
 pub async fn create_comment(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
     req:Json<CreateCommentReq>,
     claim:Option<ReqData<Claims>>,
     path: web::Path<GetSinglePostPath>
@@ -216,12 +217,12 @@ pub async fn create_comment(
     let new_comment = Comment{
         id: Uuid::new_v4().to_string(),
         text: req.text.to_owned(),
-        created_at: chrono::offset::Utc::now().to_string(),
+        created_at: get_time_naive(),
         user_name:claim.user_name.to_owned(),
         post_id: path.id.to_owned()
     };
 
-    match PostService::create_comment(&database.db, &new_comment).await {
+    match PostService::create_comment(&pool, new_comment.clone()).await {
         Ok(_)=>{},
         Err(err)=>{
             log::error!(" error creating comment {}", err.to_string());
@@ -242,7 +243,7 @@ pub async fn create_comment(
 
 #[get("/single/{id}")]
 pub async fn get_single_posts(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>,
     path:web::Path<GetSinglePostPath>
 )->HttpResponse{
@@ -285,7 +286,7 @@ pub async fn get_single_posts(
 
 #[get("/like/{id}")]
 pub async fn like_post(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>,
     path:web::Path<GetSinglePostPath>
 )->HttpResponse{
@@ -307,26 +308,10 @@ pub async fn like_post(
         }
     };
 
-    // get post 
-    let mut post = match PostService::get_single_post(&database.db, path.id.to_owned()).await{
-        Ok(data)=>{data},
-        Err(err)=>{
-            log::error!("error getting post {}", err.to_string());
-            respData.message = "Post not found".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::NotFound().json( respData); 
-        }
-    };
 
-    if !post.likes.contains(&claim.user_name){
-        post.likes.push(claim.user_name.to_owned());
-    }else{
-        post.likes.retain(|x| x!=&claim.user_name)
-    }
     
 
-    match PostService::update_post(&database.db, post).await{
+    match PostService::like_post(&pool, path.id.clone(),claim.user_name.clone()).await{
         Ok(_)=>{},
         Err(err)=>{
             log::error!("error updating post {}", err.to_string());
@@ -336,7 +321,6 @@ pub async fn like_post(
             return HttpResponse::NotFound().json( respData); 
         }
     };
-
     respData.message = "OK".to_string();
     respData.server_message = None;
     respData.data = None;

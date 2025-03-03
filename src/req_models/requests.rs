@@ -2,7 +2,6 @@
 
 use serde_derive::{Deserialize, Serialize};
 use validator::Validate;
-use crate::models::user::UserType;
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct CreateOrderMessageReq{

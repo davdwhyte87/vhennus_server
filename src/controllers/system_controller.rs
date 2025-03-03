@@ -4,16 +4,17 @@ use actix_web::{ get, post, web::{self, Data, ReqData}, HttpResponse};
 use actix_web_validator::Json;
 use bigdecimal::BigDecimal;
 use serde::Deserialize;
+use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{models::{payment_method::{PaymentMethod, PaymentMethodData}, response::{GenericResp, Response}, sell_order::{self, Currency, SellOrder}, system::System}, req_models::{create_payment_method_req::CreatePaymentMethodReq, create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}}, services::{mongo_service::MongoService, payment_method_service::PaymentMethodService, sell_order_service::SellOrderService, system_service::SystemService}, utils::auth::Claims, DbPool};
+use crate::{models::{payment_method::{PaymentMethod, PaymentMethodData}, response::{GenericResp, Response}, sell_order::{self, Currency, SellOrder}, system::System}, req_models::{create_payment_method_req::CreatePaymentMethodReq, create_sell_order_req::{CreateSellOrderReq, UpdateSellOrderReq}}, services::{mongo_service::MongoService, payment_method_service::PaymentMethodService, sell_order_service::SellOrderService, system_service::SystemService}, utils::auth::Claims};
 
 
 
 #[get("/get_system_data")]
 pub async fn get_system_data(
 
-    pool:Data<DbPool>
+    pool:Data<PgPool>
 )->HttpResponse{
     let mut respData = GenericResp::<System>{
         message:"".to_string(),

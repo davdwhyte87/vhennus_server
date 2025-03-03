@@ -3,10 +3,8 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use std::{default, string::ToString};
 use strum_macros;
-
-use super::{buy_order::BuyOrder, payment_method::{PaymentMethod, PaymentMethodData}, user::UserType};
-
-
+use crate::models::buy_order::BuyOrder;
+use crate::models::payment_method::{PaymentMethod, PaymentMethodData};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct SellOrder {

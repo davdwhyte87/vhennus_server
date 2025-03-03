@@ -2,13 +2,13 @@ use actix_web::{cookie::time::error, dev::Path, get, post, web::{self, Data, Req
 use actix_ws::handle;
 use mongodb::bson::doc;
 use serde::Deserialize;
-
-use crate::{models::{chat::Chat, chat_pair::ChatPair, circle::Circle, request_models::{CreateChatReq, CreateGroupChatReq}, response::GenericResp}, services::{chat_pair_service::ChatPairService, chat_service::ChatService, chat_session_service::{chat_ws_service, UserConnections}, circle_service::CircleService, mongo_service::MongoService, user_service::UserService}, utils::{auth::Claims, general::get_current_time_stamp}, DbPool};
+use sqlx::PgPool;
+use crate::{models::{chat::Chat, chat_pair::ChatPair, circle::Circle, request_models::{CreateChatReq, CreateGroupChatReq}, response::GenericResp}, services::{chat_pair_service::ChatPairService, chat_service::ChatService, chat_session_service::{chat_ws_service, UserConnections}, circle_service::CircleService, mongo_service::MongoService, user_service::UserService}, utils::{auth::Claims, general::get_current_time_stamp}};
 
 
 #[post("/create")]
 pub async fn create_chat(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     req: Result<web::Json<CreateChatReq>, actix_web::Error>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -86,7 +86,7 @@ struct ChatPathName {
 
 #[get("/get_pair/{id}")]
 pub async fn get_by_pair(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     path: web::Path<ChatPath>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -240,7 +240,7 @@ struct FindChatPairPath{
 
 #[get("/find_chat_pair/{user_name}")]
 pub async fn find_chat_pair(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>,
     path:web::Path<FindChatPairPath>
 )->HttpResponse{
@@ -286,7 +286,7 @@ pub async fn find_chat_pair(
 
 #[get("/get_my_chat_pairs")]
 pub async fn get_my_chat_pairs(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
 
@@ -479,7 +479,7 @@ pub async fn we_chat_connect(
     stream: web::Payload,
     data: web::Data<UserConnections>,
     claim:Option<ReqData<Claims>>,
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
 ) -> Result<HttpResponse, Error> {
     let claim = match claim {
         Some(claim)=>{claim},

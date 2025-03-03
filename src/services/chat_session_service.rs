@@ -8,8 +8,8 @@ use dashmap::DashMap;
 use futures_util::{StreamExt, SinkExt};
 use mongodb::Database;
 use serde::{Deserialize, Serialize};
-
-use crate::{models::{chat::Chat, request_models::CreateChatReq}, services::{app_notify::{send_app_notification, FcmMessage}, chat_service::ChatService, profile_service::ProfileService}, utils::general::get_current_time_stamp, DbPool};
+use sqlx::PgPool;
+use crate::{models::{chat::Chat, request_models::CreateChatReq}, services::{app_notify::{send_app_notification, FcmMessage}, chat_service::ChatService, profile_service::ProfileService}, utils::general::get_current_time_stamp,};
 use crate::services::app_notify::{MessagePayload, Notification};
 use crate::utils::general::get_time_naive;
 use crate::utils::strings_stuff::truncate_string;
@@ -47,7 +47,7 @@ pub async fn chat_ws_service(
     mut msg_stream: actix_ws::MessageStream,
     user_id: String,
     connections: web::Data<UserConnections>,
-    pool: &DbPool
+    pool: &PgPool
 ) -> Result<(), Error> {
     // Register the user
     connections.insert(user_id.clone(), session.clone());

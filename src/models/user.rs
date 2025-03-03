@@ -1,17 +1,9 @@
 use std::fmt::Write;
 use chrono::NaiveDateTime;
-use diesel::{deserialize, serialize, AsExpression, FromSqlRow};
-use diesel::backend::{Backend, RawValue};
-use diesel::deserialize::FromSql;
 use mongodb::bson::oid::ObjectId;
 use serde::{Serialize, Deserialize};
-use diesel::prelude::*;
-use diesel::sql_types::*;
-use diesel::pg::Pg;
-use diesel::serialize::{Output, ToSql};
-use crate::schema::users::dsl::*;
-#[derive(Debug, Serialize, Deserialize, Clone, Default, Queryable, Insertable)]
-#[diesel(table_name = crate::schema::users)]
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default,)]
 pub struct User {
     pub id: String,
     pub user_name: String,
@@ -23,13 +15,13 @@ pub struct User {
     pub is_deleted: bool,
 }
 
-#[derive(Debug,  Clone, Copy, AsExpression, FromSqlRow, Default, Serialize, Deserialize)]
-#[diesel(sql_type = diesel::sql_types::Integer)]
-pub enum UserType{
-    #[default]
-    User = 0,
-    Admin = 1
-}
+// #[derive(Debug,  Clone, Copy, AsExpression, FromSqlRow, Default, Serialize, Deserialize)]
+// #[diesel(sql_type = diesel::sql_types::Integer)]
+// pub enum UserType{
+//     #[default]
+//     User = 0,
+//     Admin = 1
+// }
 
 // impl<'a> FromSql<Integer, Pg> for UserType {
 //     fn from_sql(bytes: <Pg as Backend>::RawValue<'a>) -> deserialize::Result<Self> {

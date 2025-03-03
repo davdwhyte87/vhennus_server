@@ -5,18 +5,11 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use std::{default, string::ToString};
 use chrono::NaiveDateTime;
-use diesel::{Insertable, Queryable};
 use strum_macros;
 
-use super::{buy_order::BuyOrder, comment::Comment, payment_method::{PaymentMethod, PaymentMethodData}, user::UserType};
-use diesel::prelude::*;
-use diesel::associations::Associations;
 
 
-
-#[derive(Debug, Serialize, Deserialize, Clone, Default, Queryable, Insertable, AsChangeset)]
-#[diesel(belongs_to(User, foreign_key = user_name))]
-#[diesel(table_name = crate::schema::profiles)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Profile {
     pub id: String,
     pub user_name:String, 
@@ -29,10 +22,7 @@ pub struct Profile {
 }
 
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default, Queryable, Insertable)]
-#[diesel(table_name = crate::schema::friends)]
-#[diesel(belongs_to(Profile, foreign_key = user_username))]
-#[diesel(belongs_to(Profile, foreign_key = friend_username))]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Friend{
     pub id:i32,
     pub user_username:String,

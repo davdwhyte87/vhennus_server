@@ -10,20 +10,20 @@ use mongodb::bson::doc;
 use rand::Rng;
 use regex::Replacer;
 use serde::Deserialize;
+use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
 use crate::database::db::db::DB;
-use crate::DbPool;
 use crate::models::fried_request::{FriendRequest, FriendRequestStatus};
 use crate::models::helper::EmailData;
 use crate::models::power_up::{PlayerPowerUp, PowerUpType};
+use crate::models::profile::Profile;
 use crate::models::request_models::{CreateKuracoinID, GetCodeReq, LoginReq, SendFriendReq};
 use crate::models::response::{CodeResp, GenericResp, LoginResp, PlayerRunInfoRes, Response};
 use crate::models::run_info::RunInfo;
-use crate::models::user::{User, UserType};
+use crate::models::user::{User};
 use crate::models::wallet::Wallet;
 use crate::req_models::create_user_req::{CreateUserReq};
-use crate::schema::users::user_name;
 use crate::services::friend_request_service::{FriendRequestService, FriendRequestWithProfile};
 use crate::services::mongo_service::MongoService;
 
@@ -96,7 +96,7 @@ pub async fn say_hello(claim:Option<ReqData<Claims>>)-> HttpResponse{
 // }
 
 #[post("/create_account")]
-pub async fn create_account(pool: web::Data<DbPool>, new_user:Json<CreateUserReq>)->HttpResponse{
+pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq>)->HttpResponse{
     println!("new req");
 
     let hashed_password = hash(new_user.password.clone(), DEFAULT_COST).unwrap();
@@ -136,7 +136,7 @@ pub async fn create_account(pool: web::Data<DbPool>, new_user:Json<CreateUserReq
     
     // setup player data if the user is a player
     if user.user_type == "USER"{
-        let user_res = UserService::create_user(&pool,&user).await;
+        let user_res = UserService::create_user(&pool,user.clone()).await;
 
         match user_res {
             Ok(user)=> {
@@ -167,7 +167,7 @@ pub async fn create_account(pool: web::Data<DbPool>, new_user:Json<CreateUserReq
 
 
 #[post("/login")]
-pub async fn login(pool:Data<DbPool>, req:Json<LoginReq>)->HttpResponse{
+pub async fn login(pool:Data<PgPool>, req:Json<LoginReq>)->HttpResponse{
 
     let mut resp_data = GenericResp::<String>{
         message: "".to_string(),
@@ -190,7 +190,16 @@ pub async fn login(pool:Data<DbPool>, req:Json<LoginReq>)->HttpResponse{
         &pool, req.user_name.clone()).await;
 
     let  user = match user_res {
-        Ok(user)=>{user},
+        Ok(user)=>{match user{
+            Some(data)=>data,
+            None=>{
+                resp_data.message = "Error getting user".to_string();
+                resp_data.server_message = None;
+                resp_data.data = None;
+                return HttpResponse::BadRequest()
+                    .json(resp_data) 
+            }
+        }},
         Err(err)=>{
             resp_data.message = "Error getting user".to_string();
             resp_data.server_message = Some(err.to_string());
@@ -389,7 +398,7 @@ pub async fn login(pool:Data<DbPool>, req:Json<LoginReq>)->HttpResponse{
 
 
 // check if user exists
-pub async fn check_if_user_exists(pool:&Data<DbPool>, email:&String)->bool {
+pub async fn check_if_user_exists(pool:&Data<PgPool>, email:&String)->bool {
     let mut ok = false;
 
     let user = UserService::get_by_username(
@@ -748,7 +757,7 @@ pub async fn check_if_user_exists(pool:&Data<DbPool>, email:&String)->bool {
 
 #[post("/friend_request/send")]
 pub async fn send_friend_request(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
      req: Result<web::Json<SendFriendReq>, actix_web::Error>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -788,8 +797,8 @@ pub async fn send_friend_request(
         user_name: req.user_name.clone(),
         requester:claim.user_name.clone(),
         status:"PENDING".to_string(),
-        created_at:chrono::offset::Utc::now().to_string().parse().unwrap(),
-        updated_at:chrono::offset::Utc::now().to_string().parse().unwrap(),
+        created_at:get_time_naive(),
+        updated_at:get_time_naive(),
     };
 
     match FriendRequestService::create_friend_request(&pool, friend_request.clone()).await{
@@ -818,7 +827,7 @@ pub async fn send_friend_request(
 struct GenID{id:String} 
 #[get("/friend_request/accept/{id}")]
 pub async fn accept_friend_request(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     path: web::Path<GenID>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -865,7 +874,7 @@ pub async fn accept_friend_request(
 
 #[get("/friend_request/reject/{id}")]
 pub async fn reject_friend_request(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     path: web::Path<GenID>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -909,7 +918,7 @@ pub async fn reject_friend_request(
 
 #[get("/friend_requests")]
 pub async fn get_my_friend_request(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
     let mut respData = GenericResp::<Vec<FriendRequestWithProfile>>{
@@ -950,7 +959,7 @@ pub async fn get_my_friend_request(
 // delete my account
 #[get("/delete")]
 pub async fn delete_profile(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse {
     let mut respData = GenericResp::<String> {

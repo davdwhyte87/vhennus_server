@@ -2,3 +2,4 @@
 /target
 /log
 service-account.json
+.env

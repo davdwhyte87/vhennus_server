@@ -13,8 +13,6 @@ use controllers::{
 };
 mod models;
 use dashmap::DashMap;
-use diesel::{PgConnection, RunQueryDsl};
-use diesel::r2d2::ConnectionManager;
 use dotenv::dotenv;
 use get_if_addrs::get_if_addrs;
 use log::{debug, error, info};
@@ -23,43 +21,56 @@ mod database;
 use database::db::db;
 mod services;
 use serde_json::json;
+use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::models::user::User;
-use crate::schema::users::dsl::users;
 use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
 mod middlewares;
-pub mod schema;
+
 
 
 #[get("/hello")]
 async fn index() -> impl Responder {
     "Hello, Bread!"
 }
-#[get("/db_test")]
-async fn db_test(pool: web::Data<DbPool>)-> impl Responder {
-    let conn = &mut pool.get().expect("Couldn't get DB connection");
-    match users.load::<User>(conn) {
-        Ok(users_list) => HttpResponse::Ok().json(users_list),
-        Err(_) => HttpResponse::InternalServerError().finish(),
-    }
-}
+// #[get("/db_test")]
+// async fn db_test(pool: web::Data<PgPool>)-> impl Responder {
+//     let conn = &mut pool.get().expect("Couldn't get DB connection");
+//     match users.load::<User>(conn) {
+//         Ok(users_list) => HttpResponse::Ok().json(users_list),
+//         Err(_) => HttpResponse::InternalServerError().finish(),
+//     }
+// }
 // #[get("/{name}")]
 // async fn hello(name: web::Path<String>) -> impl Responder {
 //     format!("Hello {}!", &name)
 // }
 
-type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
+
 // Initialize the database pool
-fn init_db_pool() -> DbPool {
+// fn init_db_pool() -> DbPool {
+//     dotenv().ok();
+//     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+//     let manager = ConnectionManager::<PgConnection>::new(database_url);
+//     r2d2::Pool::builder()
+//         .build(manager)
+//         .expect("Failed to create pool")
+// }
+
+async fn init_db_pool_x()-> PgPool{
     dotenv().ok();
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let manager = ConnectionManager::<PgConnection>::new(database_url);
-    r2d2::Pool::builder()
-        .build(manager)
-        .expect("Failed to create pool")
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&database_url)
+        .await
+        .expect("Failed to connect to database");
+    //sqlx::migrate!().run(&pool).await.expect("Failed to run migration");
+    return pool;
 }
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -70,8 +81,6 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
     env::set_var("RUST_BACKTRACE", "full");
-    let db = MongoService::init().await;
-    let db_data = Data::new(db);
 
     let app_env = match env::var("APP_ENV"){
         Ok(data)=>{data},
@@ -110,17 +119,15 @@ async fn main() -> std::io::Result<()> {
 
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
-    let pool = init_db_pool();
-
-
+    //let pool = init_db_pool();
+    let pool = init_db_pool_x().await;
+  
     HttpServer::new(move|| {
 
         App::new()
             .app_data(Data::new(pool.clone()))
             .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
             .route("/ws", web::get().to(chat_session_service::ws_chat)) 
-            .app_data(db_data.clone())
-
             
             // USER CONTROLLERS
 
@@ -226,7 +233,6 @@ async fn main() -> std::io::Result<()> {
             .service(user_controller::create_account)
             .service(user_controller::login)
             .service(system_controller::get_system_data)
-            .service(db_test)
             
 
             //

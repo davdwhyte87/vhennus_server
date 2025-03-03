@@ -1,14 +1,14 @@
 
 use actix_web::{ get, post, web::{self, Data, ReqData}, HttpResponse, ResponseError};
 use serde::Deserialize;
-
-use crate::{models::{profile::Profile, response::GenericResp}, req_models::{create_sell_order_req::CreatePostReq, requests::UpdateProfileReq}, services::{mongo_service::MongoService, profile_service::ProfileService}, utils::auth::Claims, DbPool};
+use sqlx::PgPool;
+use crate::{models::{profile::Profile, response::GenericResp}, req_models::{create_sell_order_req::CreatePostReq, requests::UpdateProfileReq}, services::{mongo_service::MongoService, profile_service::ProfileService}, utils::auth::Claims};
 use crate::services::profile_service::{MiniProfile, ProfileWithFriends};
 use crate::services::user_service::UserService;
 
 #[get("/get_friends")]
 pub async fn get_friends(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
     let mut respData = GenericResp::<ProfileWithFriends>{
@@ -54,7 +54,7 @@ struct GetUserProfilePath{
 
 #[get("/get/{username}")]
 pub async fn get_user_profile(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>,
     path: web::Path<GetUserProfilePath>
 )->HttpResponse{
@@ -95,7 +95,7 @@ pub async fn get_user_profile(
 
 #[get("/get")]
 pub async fn get_profile(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
     let mut respData = GenericResp::<ProfileWithFriends>{
@@ -142,7 +142,7 @@ struct SearchPath{
 
 #[get("/search/{data}")]
 pub async fn search(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>,
     path: web::Path<SearchPath>
 )->HttpResponse{
@@ -184,7 +184,7 @@ pub async fn search(
 
 #[post("/update")]
 pub async fn update_profile(
-    pool:Data<DbPool>,
+    pool:Data<PgPool>,
     req: Result<web::Json<UpdateProfileReq>, actix_web::Error>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -247,7 +247,6 @@ pub async fn update_profile(
         profile.app_f_token = Some(req.app_f_token.clone().unwrap());
     }
     
-   
     // update 
     match ProfileService::update_profile(&pool, profile.clone()).await{
         Ok(data)=>{data},

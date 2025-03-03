@@ -1,20 +1,12 @@
 
-
 use std::error::Error;
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use futures::{future::ok, StreamExt};
-// use lettre::transport::smtp::commands::Data;
-use mongodb::{bson::{doc, from_document}, results::InsertOneResult, Database};
-use r2d2_mongodb::mongodb::coll;
-use crate::DbPool;
-use crate::models::{buy_order::BuyOrder, payment_method::PaymentMethodData, sell_order::SellOrder, system::System};
-use crate::schema::system_data::dsl::system_data;
-use crate::schema::system_data::id;
+use sqlx::PgPool;
+use crate::models::system::System;
 
 pub const SYSTEM_COLLECTION:&str = "System";
 
 pub struct  SystemService{
-
 }
 
 impl SystemService {
@@ -31,22 +23,11 @@ impl SystemService {
     //     Ok(res_order)
     // }
 
-    pub async fn get_system_data(pool:&DbPool)->Result<Option<System>, Box<dyn Error>>{
-        let xpool = pool.clone();
-        
-        let res =actix_web::web::block(move || {
-            let mut conn = xpool.get().unwrap();
-            
-            let data = match system_data.filter(id.eq(1)).first::<System>(&mut conn).optional(){
-              Ok(data) => data,
-                Err(err)=>{
-                    return Err(Box::new(err));
-                }
-            };
-            
-            Ok(data)
-        }).await??;
-        Ok(res)
+    pub async fn get_system_data(pool:&PgPool)->Result<Option<System>, Box<dyn Error>>{
+        let data = sqlx::query_as!(System, 
+            "SELECT * FROM system_data WHERE id=$1 ", 1)
+            .fetch_optional(pool).await?;
+        Ok(data)
     }
 
     // pub async  fn update_system(db:&Database, system:&System)->Result<(), Box<dyn Error>>{

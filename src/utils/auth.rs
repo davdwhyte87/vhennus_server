@@ -2,7 +2,7 @@ use std::error::Error;
 use chrono::Utc;
 use jsonwebtoken::{encode, decode, EncodingKey, Header, DecodingKey, Validation};
 use serde_derive::{Deserialize, Serialize};
-use crate::models::user::UserType;
+
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -1,6 +1,5 @@
 use std::default;
 use chrono::NaiveDateTime;
-use diesel::{Insertable, Queryable};
 use serde::{Deserialize, Serialize};
 
 use super::profile::Profile;
@@ -9,10 +8,7 @@ use super::profile::Profile;
 
 
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default, Queryable, Insertable)]
-#[diesel(table_name = crate::schema::friend_requests)]
-#[diesel(belongs_to(Profile,foreign_key=requester))]
-#[diesel(belongs_to(Profile,foreign_key=user_name))]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct FriendRequest {
     pub id: String,
     pub user_name:String, 
