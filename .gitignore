@@ -3,3 +3,4 @@
 /log
 service-account.json
 .env
+log4rs.yaml
