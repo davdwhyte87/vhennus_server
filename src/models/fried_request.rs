@@ -1,8 +1,9 @@
 use std::default;
-
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 use super::profile::Profile;
+
 
 
 
@@ -12,10 +13,9 @@ pub struct FriendRequest {
     pub id: String,
     pub user_name:String, 
     pub requester: String,
-    pub status:FriendRequestStatus,
-    pub created_at:String,
-    pub updated_at:String,
-    pub requester_profile: Option<Profile>
+    pub status:String, // 0 pending //1 accepted // 2 rejected , 
+    pub created_at:NaiveDateTime,
+    pub updated_at:NaiveDateTime,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Default, strum_macros::Display)]

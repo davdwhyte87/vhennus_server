@@ -1,20 +1,12 @@
 
-
 use std::error::Error;
-
 use futures::{future::ok, StreamExt};
-// use lettre::transport::smtp::commands::Data;
-use mongodb::{bson::{doc, from_document}, results::InsertOneResult, Database};
-use r2d2_mongodb::mongodb::coll;
-
-use crate::models::{buy_order::BuyOrder, payment_method::PaymentMethodData, sell_order::SellOrder, system::System};
-
-
+use sqlx::PgPool;
+use crate::models::system::System;
 
 pub const SYSTEM_COLLECTION:&str = "System";
 
 pub struct  SystemService{
-
 }
 
 impl SystemService {
@@ -31,42 +23,30 @@ impl SystemService {
     //     Ok(res_order)
     // }
 
-    pub async fn get_system_data(db:&Database)->Result<Option<System>, Box<dyn Error>>{
-        let filter = doc! {"id":"1"};
-        let collection = db.collection::<System>(SYSTEM_COLLECTION);
-        let res = collection.find_one(filter).await;
-
-        match res{
-            Ok(data)=>{
-                
-                return  Ok(data);
-
-            },
-            Err(err)=>{
-                log::error!(" error getting system data  {}", err.to_string());
-                return Err(err.into())
-            }
-        }
-        
+    pub async fn get_system_data(pool:&PgPool)->Result<Option<System>, Box<dyn Error>>{
+        let data = sqlx::query_as!(System, 
+            "SELECT * FROM system_data WHERE id=$1 ", 1)
+            .fetch_optional(pool).await?;
+        Ok(data)
     }
 
-    pub async  fn update_system(db:&Database, system:&System)->Result<(), Box<dyn Error>>{
-        let filter = doc! {"id":"1"};
-        let collection = db.collection::<System>(SYSTEM_COLLECTION);
-        let changes = doc! {
-            "$set": doc! {
-                "price": system.price.to_string(), 
-                "android_app_version": system.android_app_version.to_owned()
-            }
-        };
-        let res = collection.update_one(filter, changes).await;
-
-        match res {
-            Ok(_)=>{ return Ok(())},
-            Err(err)=>{
-                log::error!(" error updating system data  {}", err.to_string());
-                return Err(err.into())
-            }
-        }
-    }
+    // pub async  fn update_system(db:&Database, system:&System)->Result<(), Box<dyn Error>>{
+    //     let filter = doc! {"id":"1"};
+    //     let collection = db.collection::<System>(SYSTEM_COLLECTION);
+    //     let changes = doc! {
+    //         "$set": doc! {
+    //             "price": system.price.to_string(), 
+    //             "android_app_version": system.android_app_version.to_owned()
+    //         }
+    //     };
+    //     let res = collection.update_one(filter, changes).await;
+    // 
+    //     match res {
+    //         Ok(_)=>{ return Ok(())},
+    //         Err(err)=>{
+    //             log::error!(" error updating system data  {}", err.to_string());
+    //             return Err(err.into())
+    //         }
+    //     }
+    // }
 }

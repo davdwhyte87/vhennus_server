@@ -1,13 +1,13 @@
+use crate::models::chat::Chat;
+use crate::models::chat_pair::ChatPair;
 use std::error::Error;
-
 use futures::{StreamExt, TryStreamExt};
 use mongodb::{bson::doc, Database};
-
-use crate::{models::{chat::Chat, chat_pair::ChatPair, user::{self, User}}, utils::general::get_current_time_stamp};
-
-use super::{chat_pair_service::CHAT_PAIR_COLLECTION, user_service::USER_COLLECTION};
-
-
+use sqlx::PgPool;
+use crate::services::profile_service::ProfileService;
+use uuid::Uuid;
+use crate::services::chat_pair_service::ChatPairService;
+use crate::utils::general::get_time_naive;
 
 pub const CHAT_COLLECTION:&str = "Chat";
 
@@ -16,172 +16,115 @@ pub struct  ChatService{
 }
 
 impl ChatService {
-    pub async fn create_chat(db:&Database, chat:&mut Chat)->Result<Chat, Box<dyn Error>>{
-        let collection = db.collection::<Chat>(CHAT_COLLECTION);
-        let user_collection = db.collection::<User>(USER_COLLECTION);
-
-        // check if the sender and receiver exist
-
-        match user_collection.find_one(doc! {"user_name":chat.sender.clone()}).await{
-            Ok(data)=>{
-                match data {
-                    Some(_)=>{},
-                    None=>{
-                        log::error!(" user not found  ");
-                        return Err(Box::from("Sender not found"))    
-                    }
-                }
-            },
-            Err(err)=>{
-                log::error!(" error getting  user  {}", err.to_string());
-                return Err(err.into())  
-            }
-        }
-
-        match user_collection.find_one(doc! {"user_name":chat.receiver.clone()}).await{
-            Ok(data)=>{
-                match data {
-                    Some(_)=>{},
-                    None=>{
-                        log::error!(" user not found  ");
-                        return Err(Box::from("receiver not found"))    
-                    }
-                }
-            },
-            Err(err)=>{
-                log::error!(" error getting  user  {}", err.to_string());
-                return Err(err.into())  
-            }
-        }
-
-        // check if  a chat pair exists. if none, create one. 
-
-        let pair_collection = db.collection::<ChatPair>(CHAT_PAIR_COLLECTION);
-
-        // check if pair exists 
-
-        let filter = doc! {
-            "users_ids": {"$all":vec![chat.sender.clone(), chat.receiver.clone()]}
-        };
-        let chat_pair = match pair_collection.find_one(filter).await {
-            Ok(data)=>{
-                match data{
-                    Some(data)=>{
-                        data
-                    }, 
-                    None=>{
-                        // the chat pair does not exist 
-                        // create new one 
-                        let chat_pair = ChatPair{
-                            id: uuid::Uuid::new_v4().to_string(),
-                            user_name: chat.sender.clone(),
-                            users_ids: vec![chat.sender.clone(), chat.receiver.clone()],
-                            users: None,
-                            last_message: chat.message.clone(),
-                            all_read:true,
-                            created_at: get_current_time_stamp(),
-                            updated_at:get_current_time_stamp()
-                        };
-                        // last read should be set in place...
-                        match pair_collection.insert_one(chat_pair.clone()).await {
-                            Ok(data)=>{
-                                chat_pair
-                            },
-                            Err(err)=>{
-                                log::error!(" error creating  chat pair  {}", err.to_string());
-                                return Err(err.into()) 
-                            }
-                        }
-                    }
-                }
-            },
-            Err(err)=>{
-                log::error!(" error finding  chat pair  {}", err.to_string());
-                return Err(err.into()) 
-            }
-        };
-
-        chat.pair_id = chat_pair.id;
-        let res_chat = chat.clone();
-
-        match collection.insert_one(chat).await{
-            Ok(data)=>{},
-            Err(err)=>{
-                log::error!(" error saving  chat  {}", err.to_string());
-                return Err(err.into())
-            }
-        }
-
-        // update the chat pair with last message 
-        match pair_collection.update_one(doc! {
-            "id":res_chat.pair_id.clone()
-        }, doc! {"$set": doc! {"last_message":res_chat.message.clone()}}).await{
-            Ok(_)=>{
-                // we do not care if it fails... 
-            },
-            Err(err)=>{
-                // log failure
-                log::error!(" error updating chat pair  {}", err.to_string());
-               
-            }
-        };
-        Ok(res_chat)
-    }
-
-
-    pub async fn get_user_chats(db:&Database, user_name:String)->Result<Vec<Chat>, Box<dyn Error>>{
-        let collection = db.collection::<Chat>(CHAT_COLLECTION);
-
-        let filter = doc! {
-            "$or":[
-                {"sender":user_name.clone()},
-                {"receiver": user_name.clone()}
-            ]
-        };
-        let mut chats_res =match collection.find(filter).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error finding  chat  {}", err.to_string());
-                return Err(err.into())
-            }
-        };
-
-        let mut chats:Vec<Chat> = vec![];
-
-        if let Some(data) = chats_res.next().await{
-            match data{
-                Ok(x)=>{
-                    chats.push(x);
-                },
-                Err(err)=>{
-                    log::error!(" error getting  chat  {}", err.to_string());
-                    return Err(err.into())   
-                }
-            }
+    pub async fn create_chat(pool:&PgPool, chat:Chat)->Result<Chat, Box<dyn Error>>{
+        let xpool = pool.clone();
+        // check that the users exist
+        ProfileService::user_exists(pool, &*chat.sender.clone()).await?;
+        ProfileService::user_exists(pool, &*chat.receiver.clone()).await?;
+        
+        // get chat pair 
+        let chat_pair = sqlx::query_as!(ChatPair, "
+            SELECT * FROM chat_pairs WHERE user1 = $1 AND user2 = $2 OR user1 = $2 AND user2 =$1
+            " , chat.sender.clone(), chat.receiver.clone())
+            .fetch_optional(pool).await?;
+        let mut chat_pair_id = "".to_string();
+        if chat_pair.is_some() {
+            chat_pair_id = chat_pair.unwrap().id;
         }else{
-            return Err(Box::from("Error reaching chat"));
+            // create chat pair and then chat 
+            chat_pair_id = Uuid::new_v4().to_string();
+            let chat_pair = ChatPair{
+                id: chat_pair_id.clone(),
+                user1: chat.sender.clone(),
+                user2: chat.receiver.clone(),
+                last_message: Option::from(chat.message.clone()),
+                all_read: false,
+                created_at: get_time_naive(),
+                updated_at: get_time_naive(),
+            };
+            ChatPairService::create_chat_pair(pool, &chat_pair).await?;
+            // construct new chat 
+            let mut chat = chat;
+            chat.id =  Uuid::new_v4().to_string();
+            chat.pair_id = chat_pair_id;
+            chat.created_at = get_time_naive();
+            chat.updated_at = get_time_naive();
+
+            let result  = chat.clone();
+
+            //create chat 
+            let res = sqlx::query_as!(Chat, "
+            INSERT INTO chats (id,sender,receiver,message, image,created_at,updated_at, pair_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            ", chat.id,chat.sender, chat.receiver,chat.message,chat.image
+            ,chat.created_at,chat.updated_at,chat.pair_id)
+                .execute(pool).await?;
+            
+            return Ok(result);
         }
-        Ok(chats)
+        
+        // construct new chat 
+        let mut chat = chat;
+        chat.id =  Uuid::new_v4().to_string();
+        chat.pair_id = chat_pair_id.clone();
+        chat.created_at = get_time_naive();
+        chat.updated_at = get_time_naive();
+        
+        let result  = chat.clone();
+        
+        //create chat 
+        let res = sqlx::query_as!(Chat, "
+            INSERT INTO chats (id,sender,receiver,message, image,created_at,updated_at, pair_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            ", chat.id,chat.sender, chat.receiver,chat.message,chat.image
+            ,chat.created_at,chat.updated_at,chat.pair_id)
+            .execute(pool).await?;
+        
+        // update pair
+        ChatPairService::update_chat_pair(pool,chat_pair_id.clone(), result.message.clone()).await?;
+        Ok(result)
     }
 
-    pub async fn get_chats_by_pair_id(db:&Database, id:String)->Result<Vec<Chat>, Box<dyn Error>>{
-        let collection = db.collection::<Chat>(CHAT_COLLECTION);
 
-        let filter = doc! {"pair_id":id};
-        let mut chats_res =match collection.find(filter).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error finding  chat  {}", err.to_string());
-                return Err(err.into())
-            }
-        };
+    // pub async fn get_user_chats(db:&Database, user_name:String)->Result<Vec<Chat>, Box<dyn Error>>{
+    //     let collection = db.collection::<Chat>(CHAT_COLLECTION);
+    // 
+    //     let filter = doc! {
+    //         "$or":[
+    //             {"sender":user_name.clone()},
+    //             {"receiver": user_name.clone()}
+    //         ]
+    //     };
+    //     let mut chats_res =match collection.find(filter).await{
+    //         Ok(data)=>{data},
+    //         Err(err)=>{
+    //             log::error!(" error finding  chat  {}", err.to_string());
+    //             return Err(err.into())
+    //         }
+    //     };
+    // 
+    //     let mut chats:Vec<Chat> = vec![];
+    // 
+    //     if let Some(data) = chats_res.next().await{
+    //         match data{
+    //             Ok(x)=>{
+    //                 chats.push(x);
+    //             },
+    //             Err(err)=>{
+    //                 log::error!(" error getting  chat  {}", err.to_string());
+    //                 return Err(err.into())   
+    //             }
+    //         }
+    //     }else{
+    //         return Err(Box::from("Error reaching chat"));
+    //     }
+    //     Ok(chats)
+    // }
 
-        let mut chats:Vec<Chat> = vec![];
-
-        while let Some(data) = chats_res.try_next().await?{
-            chats.push(data);
-           
-        }
+    pub async fn get_chats_by_pair_id(pool:&PgPool, id:String)->Result<Vec<Chat>, Box<dyn Error>>{
+        let chats = sqlx::query_as!(Chat, "
+            SELECT * FROM chats WHERE pair_id = $1", id)
+            .fetch_all(pool).await?;
         Ok(chats)
     }
 }

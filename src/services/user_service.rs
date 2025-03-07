@@ -8,22 +8,28 @@ use mongodb::{Client, Database, options::ClientOptions};
 use mongodb::bson::{doc, Document};
 // use mongodb::bson::extjson::de::Error;
 use std::error::Error;
+use actix_web::HttpResponse;
+
 use mongodb::bson::oid::ObjectId;
 use mongodb::results::{InsertOneResult, UpdateResult};
-use r2d2_mongodb::mongodb::ErrorCode::OK;
+
+use r2d2_mongodb::mongodb::ErrorCode::{UserNotFound, OK};
 use serde_json::{json, Value};
-
-
+use sqlx::{PgPool, Postgres, Transaction};
 use crate::database::db::db::DB;
+
 use crate::models::helper::EmailData;
-use crate::models::profile::{self, Profile};
+
 use crate::models::request_models::LoginReq;
 use crate::models::user::User;
+
 use crate::utils::general::get_current_time_stamp;
 // use crate::utils::send_email::{ACTIVATE_EMAIL, get_body, send_email};
 
 use super::mongo_service::MongoService;
 use super::profile_service::PROFILE_COLLECTION;
+
+use uuid::Uuid;
 
 pub const USER_COLLECTION:&str = "User";
 
@@ -32,136 +38,123 @@ pub struct UserService{
 
 }
 
+pub struct UserView{
+    
+}
+
 impl UserService{
-    pub async fn create_user(db:&Database, user:&User)->Result<InsertOneResult, Box<dyn Error>>{
-        // Get a handle to a collection in the database.
-        let collection = db.collection::<User>(USER_COLLECTION);
-
-        let code:u32= 9384;
-
-        let mut  session = match db.client().start_session().await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!("error creating database session {}", err);
-                return Err(err.into());
-            }
+    pub async fn create_user(pool:&PgPool, user:User)->Result<(), Box<dyn Error>>{
+        let mut tx: Transaction<'_, Postgres> = match pool.begin().await {
+            Ok(tx) => tx,
+            Err(_) => return Err("Failed to start transaction".into()),
         };
-        match session.start_transaction().await{
-            Ok(data)=>{},
-            Err(err)=>{
-                log::error!("error creating session transaction  {}", err);
-                return Err(err.into());   
-            }
-        };
+        // check if the user exists
+        let user_insert = sqlx::query!(
+            "INSERT INTO users (id, user_name, email, password_hash) 
+             VALUES ($1, $2, $3, $4)",
+            user.id.clone(),
+            user.user_name.clone(),
+            user.email.clone(),
+            user.password_hash.clone(),
+        )
+            .execute(&mut *tx)
+            .await;
+        
+        if user_insert.is_err(){
+            let _ = tx.rollback().await;
+            return Err(user_insert.err().unwrap().description().into());
+        }
+        let profile_insert = sqlx::query!(
+            "INSERT INTO profiles (id,user_name) 
+             VALUES ($1, $2)",
+            Uuid::new_v4().to_string(),
+            user.user_name.clone(),
+            
+        )
+            .execute(&mut *tx)
+            .await;
 
-        let user_collection = session.client().database(&MongoService::get_db_name()).collection::<User>(USER_COLLECTION);
-        let profile_collection = session.client().database(&MongoService::get_db_name()).collection::<Profile>(PROFILE_COLLECTION);
-
-        //
-
-        let res_user =user_collection.insert_one(user).await;
-
-        let res_user = match res_user {
-            Ok(res_user)=>{res_user},
-            Err(err)=>{
-                match session.abort_transaction().await{
-                    Ok(x)=>{},
-                    Err(err)=>{log::error!("abort error {}", err)}
-                };
-                return Err(err.into())
-            }
-        };
-
-
-        // create profile 
-        let profile = Profile{
-            id : uuid::Uuid::new_v4().to_string(),
-            user_name: user.user_name.clone(), 
-            bio: "".to_string(), 
-            name: "".to_string(),
-            occupation: "".to_string(),
-            image:"".to_string(), 
-            created_at: get_current_time_stamp(),
-            updated_at: get_current_time_stamp(),
-            friends: vec![], 
-            friends_models: None,
-            app_f_token: None
-        };
-        let res_profile =profile_collection.insert_one(profile).await;
-
-        match res_profile {
-            Ok(res_profile)=>{res_profile},
-            Err(err)=>{
-                match session.abort_transaction().await{
-                    Ok(x)=>{},
-                    Err(err)=>{log::error!("abort error {}", err)}
-                };
-                return Err(err.into())
-            }
-        };
-
-        session.commit_transaction().await;
-        Ok(res_user)
+        if profile_insert.is_err() {
+            let _ = tx.rollback().await;
+            return Err("Failed to create profile".into());
+        }
+        if let Err(err) = tx.commit().await {
+            log::error!("Failed to commit transaction: {}", err);
+            return Err("Transaction commit failed".into());
+        }
+        return Ok(());
     }
 
 
 
-    pub async fn get_by_id(db:&Database, id:String)->Result<Option<User>, Box<dyn Error>>{
-        let object_id = ObjectId::parse_str(id).unwrap();
-        let filter = doc! {"_id":object_id};
-        let collection = db.collection::<User>(USER_COLLECTION);
-        let user_detail = collection.find_one(filter).await;
-        match user_detail {
-            Ok(user_detail)=>{return Ok(user_detail)},
-            Err(err)=>{return Err(err.into())}
+    // pub async fn get_by_id(db:&Database, id:String)->Result<Option<User>, Box<dyn Error>>{
+    //     let object_id = ObjectId::parse_str(id).unwrap();
+    //     let filter = doc! {"_id":object_id};
+    //     let collection = db.collection::<User>(USER_COLLECTION);
+    //     let user_detail = collection.find_one(filter).await;
+    //     match user_detail {
+    //         Ok(user_detail)=>{return Ok(user_detail)},
+    //         Err(err)=>{return Err(err.into())}
+    //     };
+    // }
+    
+
+    pub async fn get_by_username(pool:&PgPool, username:String)->Result<Option<User>, Box<dyn Error>>{
+        let user =match  sqlx::query_as!(User, 
+        "SELECT * FROM users WHERE user_name = $1 ", username.clone() )
+            .fetch_optional(pool)
+            .await{
+            Ok(opt) => opt,
+            Err(err) => {
+                return Err(Box::new(err));
+            }
         };
+        return Ok(user);
     }
-
-    pub async fn get_by_email(db:&Database, email:String)->Result<Option<User>, Box<dyn Error>>{
-
-        let filter = doc! {"email":email};
-        let collection = db.collection::<User>(USER_COLLECTION);
-        let user_detail = collection.find_one(filter).await;
-        match user_detail {
-            Ok(user_detail)=>{return Ok(user_detail)},
-            Err(err)=>{return Err(err.into())}
-        };
+    
+    
+    pub async fn delete_user(pool:&PgPool, username:String)->Result<(), Box<dyn Error>>{
+        let res = sqlx::query_as!(User,
+        "UPDATE users SET is_deleted=$1 WHERE user_name = $2 ",true, username.clone() )
+            .execute(pool).await?;
+        
+        Ok(())
     }
 
     
-    pub async fn get_by_(db:&Database, filter:Document)->Result<Option<User>, Box<dyn Error>>{
+    // pub async fn get_by_(db:&Database, filter:Document)->Result<Option<User>, Box<dyn Error>>{
+    // 
+    //     let collection = db.collection::<User>(USER_COLLECTION);
+    //     let user_detail = collection.find_one(filter).await;
+    //     match user_detail {
+    //         Ok(user_detail)=>{return Ok(user_detail)},
+    //         Err(err)=>{return Err(err.into())}
+    //     };
+    // }
 
-        let collection = db.collection::<User>(USER_COLLECTION);
-        let user_detail = collection.find_one(filter).await;
-        match user_detail {
-            Ok(user_detail)=>{return Ok(user_detail)},
-            Err(err)=>{return Err(err.into())}
-        };
-    }
-
-    pub async fn update(
-        db:&Database,
-        email:&String,
-        mut new_data:&User
-    )
-        ->Result<UpdateResult, Box<dyn Error>>
-    {
-        let filter = doc! {"email":email};
-        let collection = db.collection::<User>(USER_COLLECTION);
-        let new_doc = doc! {
-            "$set":{
-                "code":new_data.code.to_owned(),
-            }
-        };
-        let updated_doc = collection.update_one(filter,new_doc )
-            .await;
-
-        match updated_doc {
-            Ok(updated_doc)=>{return Ok(updated_doc)},
-            Err(err)=>{
-                return Err(err.into())
-            }
-        }
-    }
+//     pub async fn update(
+//         db:&Database,
+//         email:&String,
+//         mut new_data:&User
+//     )
+//         ->Result<UpdateResult, Box<dyn Error>>
+//     {
+//         let filter = doc! {"email":email};
+//         let collection = db.collection::<User>(USER_COLLECTION);
+//         let new_doc = doc! {
+//             "$set":{
+//                 "code":new_data.code.to_owned(),
+//             }
+//         };
+//         let updated_doc = collection.update_one(filter,new_doc )
+//             .await;
+// 
+//         match updated_doc {
+//             Ok(updated_doc)=>{return Ok(updated_doc)},
+//             Err(err)=>{
+//                 return Err(err.into())
+//             }
+//         }
+//     }
 }
 

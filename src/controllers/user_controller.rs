@@ -10,18 +10,22 @@ use mongodb::bson::doc;
 use rand::Rng;
 use regex::Replacer;
 use serde::Deserialize;
+use sqlx::PgPool;
+use uuid::Uuid;
 use validator::Validate;
+use crate::controllers::service_errors::ServiceError;
 use crate::database::db::db::DB;
 use crate::models::fried_request::{FriendRequest, FriendRequestStatus};
 use crate::models::helper::EmailData;
 use crate::models::power_up::{PlayerPowerUp, PowerUpType};
+use crate::models::profile::Profile;
 use crate::models::request_models::{CreateKuracoinID, GetCodeReq, LoginReq, SendFriendReq};
 use crate::models::response::{CodeResp, GenericResp, LoginResp, PlayerRunInfoRes, Response};
 use crate::models::run_info::RunInfo;
-use crate::models::user::{User, UserType};
+use crate::models::user::{User};
 use crate::models::wallet::Wallet;
 use crate::req_models::create_user_req::{CreateUserReq};
-use crate::services::friend_request_service::FriendRequestService;
+use crate::services::friend_request_service::{FriendRequestService, FriendRequestWithProfile};
 use crate::services::mongo_service::MongoService;
 
 use crate::services::profile_service::ProfileService;
@@ -30,6 +34,7 @@ use crate::services::user_service::UserService;
 use crate::services::wallet_service::WalletService;
 use crate::utils::auth::{Claims, decode_token, encode_token};
 use crate::utils::formatter;
+use crate::utils::general::{get_time_naive, has_no_spaces, is_all_lowercase};
 // use crate::utils::send_email::send_email;
 
 
@@ -92,7 +97,7 @@ pub async fn say_hello(claim:Option<ReqData<Claims>>)-> HttpResponse{
 // }
 
 #[post("/create_account")]
-pub async fn create_account(database:Data<MongoService>, new_user:Json<CreateUserReq>)->HttpResponse{
+pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq>)->HttpResponse{
     println!("new req");
 
     let hashed_password = hash(new_user.password.clone(), DEFAULT_COST).unwrap();
@@ -101,49 +106,59 @@ pub async fn create_account(database:Data<MongoService>, new_user:Json<CreateUse
         server_message: None,
         data: None
     };
+    
+    // make sure user name is lowercase 
+    if !is_all_lowercase(new_user.user_name.clone().as_str()){
+        resp_data.message = "Username should be lowercased".to_string();
+        resp_data.server_message = None;
+        resp_data.data = None;
+        return HttpResponse::BadRequest()
+            .json(resp_data)  
+    }
+    
+    if !has_no_spaces(new_user.user_name.clone().as_str()){
+        resp_data.message = "Username should have no spaces".to_string();
+        resp_data.server_message = None;
+        resp_data.data = None;
+        return HttpResponse::BadRequest()
+            .json(resp_data)
+    }
+    match ProfileService::user_exists(&pool, &*new_user.user_name.clone()).await{
+        Ok(user) => {
+            if(user){
+                resp_data.message = "User already exists".to_string();
+                resp_data.server_message =None;
+                resp_data.data = None;
+                return HttpResponse::BadRequest()
+                    .json(resp_data)
+            }
+        },
+        Err(e) => {
+            log::error!("error getting user data {}", e );
+            resp_data.message = "Error getting user".to_string();
+            resp_data.server_message = Option::from(e.to_string());
+            resp_data.data = None;
+            return HttpResponse::InternalServerError()
+                .json(resp_data)
+        }
+    }
+    
     let user = User{
         user_name:new_user.user_name.to_owned(),
-        created_at:chrono::offset::Utc::now().to_string(),
+        created_at:get_time_naive(),
         email:None,
         code:None,
-        user_type: new_user.into_inner().user_type,
-        id:None,
+        user_type: "USER".to_string(),
+        id: Uuid::new_v4().to_string(),
         password_hash: hashed_password,
         is_deleted:false
     };
 
-    // check if user exists
-    let user_res = UserService::get_by_(
-        &database.db,
-        doc! {"user_name":user.user_name.clone()}
-    ).await;
 
-    match user_res {
-        Ok(user)=>{
-            match user {
-                Some(data)=>{
-                    resp_data.message = "This user exists".to_string();
-                    resp_data.server_message = None;
-                    resp_data.data = None;
-                    return HttpResponse::BadRequest()
-                    .json(resp_data)
-                },
-                None=>{
-
-                }
-            }
-        },
-        Err(err)=>{
-            resp_data.message = "Error validating user".to_string();
-            resp_data.server_message = Some(err.to_string());
-            resp_data.data = None;
-            return HttpResponse::InternalServerError()
-            .json(resp_data)
-        }
-    }
+    
     // setup player data if the user is a player
-    if user.user_type == UserType::User{
-        let user_res = UserService::create_user(database.db.borrow(),&user).await;
+    if user.user_type == "USER"{
+        let user_res = UserService::create_user(&pool,user.clone()).await;
 
         match user_res {
             Ok(user)=> {
@@ -153,7 +168,11 @@ pub async fn create_account(database:Data<MongoService>, new_user:Json<CreateUse
                 return HttpResponse::Ok().json(resp_data)
             },
             Err(err)=>{
+                
                 resp_data.message = "Error creating user".to_string();
+                if err.to_string() == "USER_EXISTS"{
+                    resp_data.message = "Username already exists".to_string();
+                }
                 resp_data.server_message = Some(err.to_string());
                 resp_data.data = None;
                 return HttpResponse::InternalServerError()
@@ -166,12 +185,11 @@ pub async fn create_account(database:Data<MongoService>, new_user:Json<CreateUse
         resp_data.data = None;
         return HttpResponse::BadRequest().json(resp_data) 
     }
-
 }
 
 
 #[post("/login")]
-pub async fn login(database:Data<MongoService>, req:Json<LoginReq>)->HttpResponse{
+pub async fn login(pool:Data<PgPool>, req:Json<LoginReq>)->HttpResponse{
 
     let mut resp_data = GenericResp::<String>{
         message: "".to_string(),
@@ -190,28 +208,22 @@ pub async fn login(database:Data<MongoService>, req:Json<LoginReq>)->HttpRespons
     };
 
     // check if user exists
-    let user_res = UserService::get_by_(
-        &database.db,
-        doc! {"user_name":req.user_name.clone()}
-    ).await;
+    let user_res = UserService::get_by_username(
+        &pool, req.user_name.clone()).await;
 
     let  user = match user_res {
-        Ok(user)=>{
-            match user {
-                Some(data)=>{
-                 data
-                },
-                None=>{
-                    resp_data.message = "Authentication Error".to_string();
-                    resp_data.server_message = None;
-                    resp_data.data = None;
-                    return HttpResponse::BadRequest()
-                    .json(resp_data)
-                }
+        Ok(user)=>{match user{
+            Some(data)=>data,
+            None=>{
+                resp_data.message = "Error getting user".to_string();
+                resp_data.server_message = None;
+                resp_data.data = None;
+                return HttpResponse::BadRequest()
+                    .json(resp_data) 
             }
-        },
+        }},
         Err(err)=>{
-            resp_data.message = "Error validating user".to_string();
+            resp_data.message = "Error getting user".to_string();
             resp_data.server_message = Some(err.to_string());
             resp_data.data = None;
             return HttpResponse::InternalServerError()
@@ -231,7 +243,7 @@ pub async fn login(database:Data<MongoService>, req:Json<LoginReq>)->HttpRespons
     
     let hashed_password = hash(req.password.clone(), DEFAULT_COST).unwrap();
 
-    log::debug!("HASH {} --- real hash {}", hashed_password, user.password_hash);
+    //log::debug!("HASH {} --- real hash {}", hashed_password, user.password_hash);
     let is_valid = match verify(req.password.clone(), &user.password_hash){
         Ok(data)=>{data},
         Err(err)=>{
@@ -246,7 +258,7 @@ pub async fn login(database:Data<MongoService>, req:Json<LoginReq>)->HttpRespons
     };
     // compare passwords
     if !is_valid{
-        resp_data.message = "Invalid data".to_string();
+        resp_data.message = "Invalid login data".to_string();
         resp_data.server_message = None;
         resp_data.data = None;
         return HttpResponse::BadRequest()
@@ -408,20 +420,17 @@ pub async fn login(database:Data<MongoService>, req:Json<LoginReq>)->HttpRespons
 
 
 // check if user exists
-pub async fn check_if_user_exists(database:&Data<MongoService>, email:&String)->bool {
+pub async fn check_if_user_exists(pool:&Data<PgPool>, email:&String)->bool {
     let mut ok = false;
 
-    let user = UserService::get_by_email(
-        &database.db,
+    let user = UserService::get_by_username(
+        &pool,
         email.to_string()
     ).await;
 
     match user {
         Ok(user)=>{
-            match user {
-                Some(_)=>{ok=true},
-                None=>{ok=false}
-            }
+            ok = true;
         },
         Err(_)=>{ok = false}
     }
@@ -430,48 +439,25 @@ pub async fn check_if_user_exists(database:&Data<MongoService>, email:&String)->
 }
 
 // check if user exists
-pub async fn check_if_user_exists_user_name(database:&Data<MongoService>, user_name:&String)->bool {
-    let mut ok = false;
+// pub async fn check_if_user_exists_user_name(pool:&Data<DbPool>, user_name:&String)->bool {
+//     let mut ok = false;
+// 
+//     let user = UserService::get_by_username(
+//         &pool,
+//         user_name
+//     ).await;
+// 
+//     match user {
+//         Ok(user)=>{
+//          ok = true;
+//         },
+//         Err(_)=>{ok = false}
+//     }
+// 
+//     return ok;
+// }
 
-    let user = UserService::get_by_(
-        &database.db,
-        doc! {"user_name":user_name}
-    ).await;
 
-    match user {
-        Ok(user)=>{
-            match user {
-                Some(_)=>{ok=true},
-                None=>{ok=false}
-            }
-        },
-        Err(_)=>{ok = false}
-    }
-
-    return ok;
-}
-
-// check if user exists
-pub async fn check_if_user_exists_username(database:&Data<MongoService>, user_name:&String)->bool {
-    let mut ok = false;
-
-    let user = UserService::get_by_(
-        &database.db,
-        doc! {"user_name":user_name}
-    ).await;
-
-    match user {
-        Ok(user)=>{
-            match user {
-                Some(_)=>{ok=true},
-                None=>{ok=false}
-            }
-        },
-        Err(_)=>{ok = false}
-    }
-
-    return ok;
-}
 
 // #[post("/user/kura_login")]
 // pub async fn kura_id_login(database:Data<MongoService>, req_data:Json<CreateKuracoinID>)->HttpResponse {
@@ -793,7 +779,7 @@ pub async fn check_if_user_exists_username(database:&Data<MongoService>, user_na
 
 #[post("/friend_request/send")]
 pub async fn send_friend_request(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
      req: Result<web::Json<SendFriendReq>, actix_web::Error>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -825,70 +811,39 @@ pub async fn send_friend_request(
                 )
         }
     };
-
-    let user_profile = match ProfileService::get_user_profile(&database.db, claim.user_name.clone()).await{
-        Ok(data)=>{data},
-        Err(err)=>{
-            log::error!("error getting user {}", err);
-            respData.message = "Error getting user profile".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::InternalServerError().json(respData); 
-        }
-    };
-
-    for friend in user_profile.friends{
-        if friend == req.user_name.clone(){
-            respData.message = "Users are already friends".to_string();
-            respData.server_message = None;
-            respData.data = None;
-            return HttpResponse::BadRequest().json(respData);   
-        }
-    }
-
-    match UserService::get_by_(&database.db, doc! {"user_name":req.user_name.clone()}).await{
-        Ok(data)=>{
-            match data {
-                Some(_)=>{},
-                None=>{
-                    respData.message = "User not found".to_string();
-                    respData.server_message =None;
-                    respData.data = None;
-                    return HttpResponse::BadRequest().json(respData);   
-                }
-            }
-        },
-        Err(err)=>{
-            log::error!("error getting user {}", err);
-            respData.message = "Error getting username".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::BadRequest().json(respData);
-        }
-    }
+    
 
   
     let friend_request = FriendRequest{
         id: uuid::Uuid::new_v4().to_string(),
         user_name: req.user_name.clone(),
         requester:claim.user_name.clone(),
-        status:FriendRequestStatus::PENDING,
-        created_at:chrono::offset::Utc::now().to_string(),
-        updated_at:chrono::offset::Utc::now().to_string(),
-        requester_profile: None
+        status:"PENDING".to_string(),
+        created_at:get_time_naive(),
+        updated_at:get_time_naive(),
     };
 
-    match FriendRequestService::create_friend_request(&database.db, friend_request.clone()).await{
+    match FriendRequestService::create_friend_request(&pool, friend_request.clone()).await{
         Ok(data)=>{data}, 
-        Err(err)=>{
+        Err(ServiceError::FriendRequestExists)=>{
+            respData.message = "Friend request already sent!".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData);
+        }
+        Err(ServiceError::DatabaseError(err))=>{
             respData.message = "Error creating friend request".to_string();
-            if (err.to_string() == "FRIEND_REQUEST_EXISTS"){
-                respData.message = "Friend request already sent!".to_string();   
-            }
             respData.server_message = Some(err.to_string());
             respData.data = None;
             log::error!("error creating friend request {}", err);
             return HttpResponse::InternalServerError().json(respData);
+        }
+        _ => {
+            respData.message = "Error creating friend request".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            log::error!("unexpected error creating friend request ___",);
+            return HttpResponse::InternalServerError().json(respData); 
         }
     };
 
@@ -904,7 +859,7 @@ pub async fn send_friend_request(
 struct GenID{id:String} 
 #[get("/friend_request/accept/{id}")]
 pub async fn accept_friend_request(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
     path: web::Path<GenID>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -913,32 +868,6 @@ pub async fn accept_friend_request(
         server_message: Some("".to_string()),
         data: Some(FriendRequest::default())
     };
-
-    // get friend request 
-    let fr = match FriendRequestService::get_single_friend_request(&database.db, path.id.clone()).await{
-        Ok(data)=>{
-            match data{
-                Some(data)=>{data},
-                None=>{
-                    log::error!("error getting FR NOT FOUND");
-                    respData.message = "Error finding request".to_string();
-                    respData.server_message = None;
-                    respData.data = None;
-                    return HttpResponse::BadRequest().json(respData);   
-                }
-            }
-        },
-        Err(err)=>{
-            log::error!("error getting FR {}", err);
-            respData.message = "Error accepting friend request".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-
-            return HttpResponse::InternalServerError().json(respData);
-        }
-    };
-
-    log::error!("Got friend request ");
 
     let claim = match claim {
         Some(claim)=>{claim},
@@ -952,19 +881,12 @@ pub async fn accept_friend_request(
         }
     };
 
-    // check if the req owner owns the friend request
-    if fr.user_name != claim.user_name.clone(){
-        respData.message = "you cannot accept this request".to_string();
-        respData.server_message = None;
-        respData.data = None;
-
-        return HttpResponse::BadRequest().json(respData);
-    }
+  
  
-    match FriendRequestService::accept_friend_request(&database.db, fr).await{
+    match FriendRequestService::accept_friend_request(&pool, path.id.clone(), claim.user_name.clone() ).await{
         Ok(data)=>{data}, 
         Err(err)=>{
-            log::error!("accepting request {}", err);
+            log::error!("error accepting request {}", err);
             respData.message = "Error accepting friend request".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
@@ -984,7 +906,7 @@ pub async fn accept_friend_request(
 
 #[get("/friend_request/reject/{id}")]
 pub async fn reject_friend_request(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
     path: web::Path<GenID>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -993,32 +915,6 @@ pub async fn reject_friend_request(
         server_message: Some("".to_string()),
         data: Some(FriendRequest::default())
     };
-
-    // get friend request 
-    let fr = match FriendRequestService::get_single_friend_request(&database.db, path.id.clone()).await{
-        Ok(data)=>{
-            match data{
-                Some(data)=>{data},
-                None=>{
-                    respData.message = "Error finding request".to_string();
-                    respData.server_message = None;
-                    respData.data = None;
-                    return HttpResponse::BadRequest().json(respData);   
-                }
-            }
-        },
-        Err(err)=>{
-            log::error!("error getting FR {}", err);
-            respData.message = "Error getting friend request".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-
-            return HttpResponse::InternalServerError().json(respData);
-        }
-    };
-
-
-    
     let claim = match claim {
         Some(claim)=>{claim},
         None=>{
@@ -1030,21 +926,12 @@ pub async fn reject_friend_request(
                 )
         }
     };
-
-    // check if the req owner owns the friend request
-    if fr.user_name != claim.user_name.clone(){
-        respData.message = "you cannot accept this request".to_string();
-        respData.server_message = None;
-        respData.data = None;
-
-        return HttpResponse::BadRequest().json(respData);
-    }
- 
-    match FriendRequestService::delete_friend_request(&database.db, fr.id).await{
+    
+    match FriendRequestService::reject_friend_request(&pool, path.id.clone(), claim.user_name.clone()).await{
         Ok(data)=>{data}, 
         Err(err)=>{
-            log::error!("error deleting FR {}", err);
-            respData.message = "Error deleting friend request".to_string();
+            log::error!("error rejecting FR {}", err);
+            respData.message = "Error rejecting friend request".to_string();
             respData.server_message = Some(err.to_string());
             respData.data = None;
 
@@ -1063,13 +950,13 @@ pub async fn reject_friend_request(
 
 #[get("/friend_requests")]
 pub async fn get_my_friend_request(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
-    let mut respData = GenericResp::<Vec<FriendRequest>>{
+    let mut respData = GenericResp::<Vec<FriendRequestWithProfile>>{
         message:"".to_string(),
         server_message: Some("".to_string()),
-        data: Some(vec![FriendRequest::default()])
+        data: Some(vec![FriendRequestWithProfile::default()])
     };
 
     let claim = match claim {
@@ -1078,14 +965,12 @@ pub async fn get_my_friend_request(
             respData.message = "Unauthorized".to_string();
 
             return HttpResponse::Unauthorized()
-                .json(
-                    respData
-                )
+                .json(respData)
         }
     };
 
     // get friend request 
-    let fr = match FriendRequestService::get_user_friend_request(&database.db, claim.user_name.clone()).await{
+    let fr = match FriendRequestService::get_user_friend_request(&pool, claim.user_name.clone()).await{
         Ok(data)=>{data},
         Err(err)=>{
             respData.message = "Error getting friend request".to_string();
@@ -1101,4 +986,43 @@ pub async fn get_my_friend_request(
 
     return HttpResponse::Ok().json(respData);
 
+}
+
+// delete my account
+#[get("/delete")]
+pub async fn delete_profile(
+    pool:Data<PgPool>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse {
+    let mut respData = GenericResp::<String> {
+        message: "".to_string(),
+        server_message:None,
+        data: None
+    };
+
+    //     //claim
+        let claim = match claim {
+            Some(claim)=>{claim},
+            None=>{
+                respData.message = "Unauthorized".to_string();
+    
+                return HttpResponse::Unauthorized()
+                    .json(
+                        respData
+                    )
+            }
+        };
+    
+    match UserService::delete_user(&pool, claim.user_name.clone()).await{
+        Ok(data)=>{
+            respData.message = "Ok".to_string();
+            return HttpResponse::Ok().json(respData);
+        },
+        Err(err)=>{
+            log::error!("error deleting user {}", err);
+            respData.message = "Error deleting user".to_string();
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    }
 }

@@ -2,13 +2,13 @@ use actix_web::{cookie::time::error, dev::Path, get, post, web::{self, Data, Req
 use actix_ws::handle;
 use mongodb::bson::doc;
 use serde::Deserialize;
-
+use sqlx::PgPool;
 use crate::{models::{chat::Chat, chat_pair::ChatPair, circle::Circle, request_models::{CreateChatReq, CreateGroupChatReq}, response::GenericResp}, services::{chat_pair_service::ChatPairService, chat_service::ChatService, chat_session_service::{chat_ws_service, UserConnections}, circle_service::CircleService, mongo_service::MongoService, user_service::UserService}, utils::{auth::Claims, general::get_current_time_stamp}};
-
+use crate::models::chat_pair::ChatPairView;
 
 #[post("/create")]
 pub async fn create_chat(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
     req: Result<web::Json<CreateChatReq>, actix_web::Error>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -42,31 +42,34 @@ pub async fn create_chat(
     };
 
     let mut chat = Chat{
-        id: uuid::Uuid::new_v4().to_string(),
+        id: "".to_string(),
         pair_id: if req.pair_id.is_some(){req.pair_id.clone().unwrap()} else{"".to_string()},
         sender: claim.user_name.clone(),
         receiver: req.receiver.clone(),
         message: "".to_string(),
-        image: "".to_string(),
-        created_at: get_current_time_stamp(),
-        updated_at:get_current_time_stamp()
+        image:None,
+        created_at: get_current_time_stamp().parse().unwrap(),
+        updated_at:get_current_time_stamp().parse().unwrap()
     };
     if req.message.is_some(){
         chat.message = req.message.clone().unwrap_or_default()
     }
     if req.image.is_some(){
-        chat.image = req.image.clone().unwrap_or_default()
+        chat.image = Some(req.image.clone().unwrap_or_default())
     }
 
     
-    match ChatService::create_chat(&database.db, &mut chat).await{
+    match ChatService::create_chat(&pool, chat).await{
         Ok(_)=>{},
         Err(err)=>{
             log::error!("{}", err)
         }
     };
-
-    return HttpResponse::Ok().json({})
+    
+    respData.data = None;
+    respData.message = "ok".to_string();
+    respData.server_message = None;
+    return HttpResponse::Ok().json(respData)
 }
 
 
@@ -83,7 +86,7 @@ struct ChatPathName {
 
 #[get("/get_pair/{id}")]
 pub async fn get_by_pair(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
     path: web::Path<ChatPath>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
@@ -94,7 +97,7 @@ pub async fn get_by_pair(
         data: None
     };
     
-    let chats = match ChatService::get_chats_by_pair_id(&database.db, path.id.clone()).await{
+    let chats = match ChatService::get_chats_by_pair_id(&pool, path.id.clone()).await{
         Ok(data)=>{data},
         Err(err)=>{
             log::error!("error getting chats {}", err);
@@ -111,124 +114,124 @@ pub async fn get_by_pair(
     return HttpResponse::Ok().json(respData)
 }
 
-#[get("/get_all_chats")]
-pub async fn get_all_chats(
-    claim:Option<ReqData<Claims>>,
-    database:Data<MongoService>,
-)->HttpResponse{
-    let mut respData = GenericResp::<Vec<Chat>>{
-        message:"".to_string(),
-        server_message: Some("".to_string()),
-        data: None
-    };
-    let claim = match claim {
-        Some(claim)=>{claim},
-        None=>{
-            respData.message = "Unauthorized".to_string();
-
-            return HttpResponse::Unauthorized()
-                .json(
-                    respData
-                )
-        }
-    };
-
-    let chats = match ChatService::get_user_chats(&database.db, claim.user_name.clone()).await{
-        Ok(data)=>{data},
-        Err(err)=>{
-            log::error!("error getting chats {}", err.to_string());
-            respData.message = "error getting chats".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::InternalServerError().json( respData); 
-        }
-    };
-    respData.message = "ok".to_string();
-    respData.server_message = None;
-    respData.data = Some(chats);
-    return HttpResponse::Ok().json(respData)
-}
+// #[get("/get_all_chats")]
+// pub async fn get_all_chats(
+//     claim:Option<ReqData<Claims>>,
+//     database:Data<MongoService>,
+// )->HttpResponse{
+//     let mut respData = GenericResp::<Vec<Chat>>{
+//         message:"".to_string(),
+//         server_message: Some("".to_string()),
+//         data: None
+//     };
+//     let claim = match claim {
+//         Some(claim)=>{claim},
+//         None=>{
+//             respData.message = "Unauthorized".to_string();
+// 
+//             return HttpResponse::Unauthorized()
+//                 .json(
+//                     respData
+//                 )
+//         }
+//     };
+// 
+//     let chats = match ChatService::get_user_chats(&database.db, claim.user_name.clone()).await{
+//         Ok(data)=>{data},
+//         Err(err)=>{
+//             log::error!("error getting chats {}", err.to_string());
+//             respData.message = "error getting chats".to_string();
+//             respData.server_message = Some(err.to_string());
+//             respData.data = None;
+//             return HttpResponse::InternalServerError().json( respData); 
+//         }
+//     };
+//     respData.message = "ok".to_string();
+//     respData.server_message = None;
+//     respData.data = Some(chats);
+//     return HttpResponse::Ok().json(respData)
+// }
 
 
 #[derive(Deserialize)]
 pub struct UserNamePath{
     pub user_name:String
 }
-#[get("/create_chat_pair/{user_name}")]
-pub async fn create_chat_pair(
-    database:Data<MongoService>,
-    path: web::Path<UserNamePath>,
-    claim:Option<ReqData<Claims>>
-)->HttpResponse{
-
-    let mut respData = GenericResp::<ChatPair>{
-        message:"".to_string(),
-        server_message: Some("".to_string()),
-        data: None
-    };
-
-    
-    let claim = match claim {
-        Some(claim)=>{claim},
-        None=>{
-            respData.message = "Unauthorized".to_string();
-
-            return HttpResponse::Unauthorized()
-                .json(
-                    respData
-                )
-        }
-    };
-
-    //check if the username is correct 
-    match UserService::get_by_(&database.db, doc! {"user_name":path.user_name.clone()}).await{
-        Ok(data)=>{
-            match data{
-                Some(_)=>{},
-                None=>{
-                    respData.message = "User is not found".to_string();
-                    respData.server_message = None;
-                    respData.data = None;
-                    return HttpResponse::BadRequest().json( respData);    
-                }
-            }
-        },
-        Err(err)=>{
-            log::error!("error getting suer   {}", err.to_string());
-            respData.message = "Error getting user".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::InternalServerError().json( respData);     
-        }
-    }
-
-    let chat_pair = ChatPair{
-        id : uuid::Uuid::new_v4().to_string(),
-        user_name: claim.user_name.clone(),
-        users_ids: vec![claim.user_name.clone(), path.user_name.clone()],
-        users: None,
-        last_message : "".to_string(),
-        all_read: true,
-        created_at: get_current_time_stamp(),
-        updated_at: get_current_time_stamp()
-    };
-
-    let res = match ChatPairService::create_chat_pair(&database.db, &chat_pair).await {
-        Ok(data)=>{data},
-        Err(err)=>{
-            log::error!("error creating chat  {}", err.to_string());
-            respData.message = "Error creating chat pair".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::InternalServerError().json( respData);    
-        }
-    };
-
-    respData.message = "ok".to_string();
-    respData.server_message = None;
-    respData.data = Some(res);
-    return HttpResponse::Ok().json(respData)
-}
+// #[get("/create_chat_pair/{user_name}")]
+// pub async fn create_chat_pair(
+//     database:Data<MongoService>,
+//     path: web::Path<UserNamePath>,
+//     claim:Option<ReqData<Claims>>
+// )->HttpResponse{
+// 
+//     let mut respData = GenericResp::<ChatPair>{
+//         message:"".to_string(),
+//         server_message: Some("".to_string()),
+//         data: None
+//     };
+// 
+//     
+//     let claim = match claim {
+//         Some(claim)=>{claim},
+//         None=>{
+//             respData.message = "Unauthorized".to_string();
+// 
+//             return HttpResponse::Unauthorized()
+//                 .json(
+//                     respData
+//                 )
+//         }
+//     };
+// 
+//     //check if the username is correct 
+//     match UserService::get_by_(&database.db, doc! {"user_name":path.user_name.clone()}).await{
+//         Ok(data)=>{
+//             match data{
+//                 Some(_)=>{},
+//                 None=>{
+//                     respData.message = "User is not found".to_string();
+//                     respData.server_message = None;
+//                     respData.data = None;
+//                     return HttpResponse::BadRequest().json( respData);    
+//                 }
+//             }
+//         },
+//         Err(err)=>{
+//             log::error!("error getting suer   {}", err.to_string());
+//             respData.message = "Error getting user".to_string();
+//             respData.server_message = Some(err.to_string());
+//             respData.data = None;
+//             return HttpResponse::InternalServerError().json( respData);     
+//         }
+//     }
+// 
+//     let chat_pair = ChatPair{
+//         id : uuid::Uuid::new_v4().to_string(),
+//         user_name: claim.user_name.clone(),
+//         users_ids: vec![claim.user_name.clone(), path.user_name.clone()],
+//         users: None,
+//         last_message : "".to_string(),
+//         all_read: true,
+//         created_at: get_current_time_stamp(),
+//         updated_at: get_current_time_stamp()
+//     };
+// 
+//     let res = match ChatPairService::create_chat_pair(&database.db, &chat_pair).await {
+//         Ok(data)=>{data},
+//         Err(err)=>{
+//             log::error!("error creating chat  {}", err.to_string());
+//             respData.message = "Error creating chat pair".to_string();
+//             respData.server_message = Some(err.to_string());
+//             respData.data = None;
+//             return HttpResponse::InternalServerError().json( respData);    
+//         }
+//     };
+// 
+//     respData.message = "ok".to_string();
+//     respData.server_message = None;
+//     respData.data = Some(res);
+//     return HttpResponse::Ok().json(respData)
+// }
 
 #[derive(Deserialize)]
 struct FindChatPairPath{
@@ -237,12 +240,12 @@ struct FindChatPairPath{
 
 #[get("/find_chat_pair/{user_name}")]
 pub async fn find_chat_pair(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>,
     path:web::Path<FindChatPairPath>
 )->HttpResponse{
 
-    let mut respData = GenericResp::<Option<ChatPair>>{
+    let mut respData = GenericResp::<ChatPairView>{
         message:"".to_string(),
         server_message: Some("".to_string()),
         data: None
@@ -263,7 +266,7 @@ pub async fn find_chat_pair(
 
 
 
-    let res = match ChatPairService::find_chat_pair(&database.db, claim.user_name.clone(), path.user_name.clone()).await {
+    let res = match ChatPairService::find_chat_pair(&pool, claim.user_name.clone(), path.user_name.clone()).await {
         Ok(data)=>{data},
         Err(err)=>{
             log::error!("error getting chats  {}", err.to_string());
@@ -283,11 +286,11 @@ pub async fn find_chat_pair(
 
 #[get("/get_my_chat_pairs")]
 pub async fn get_my_chat_pairs(
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
 
-    let mut respData = GenericResp::<Vec<ChatPair>>{
+    let mut respData = GenericResp::<Vec<ChatPairView>>{
         message:"".to_string(),
         server_message: Some("".to_string()),
         data: None
@@ -308,7 +311,7 @@ pub async fn get_my_chat_pairs(
 
 
 
-    let res = match ChatPairService::get_all_my_chat_pairs(&database.db, claim.user_name.clone()).await {
+    let res = match ChatPairService::get_all_my_chat_pairs(&pool, claim.user_name.clone()).await {
         Ok(data)=>{data},
         Err(err)=>{
             log::error!("error getting chats  {}", err.to_string());
@@ -325,149 +328,149 @@ pub async fn get_my_chat_pairs(
     return HttpResponse::Ok().json(respData)
 }
 
-#[post("/create")]
-pub async fn create_group_chat(
-    database:Data<MongoService>,
-    req: Result<web::Json<CreateGroupChatReq>, actix_web::Error>,
-    claim:Option<ReqData<Claims>>
-)->HttpResponse{
-
-    let mut respData = GenericResp::<Chat>{
-        message:"".to_string(),
-        server_message: Some("".to_string()),
-        data: None
-    };
-    let req = match req {
-        Ok(data)=>{data},
-        Err(err)=>{
-            log::error!("validation  error  {}", err.to_string());
-            respData.message = "Validation error".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::InternalServerError().json( respData); 
-        }
-    };
-
-    let claim = match claim {
-        Some(claim)=>{claim},
-        None=>{
-            respData.message = "Unauthorized".to_string();
-
-            return HttpResponse::Unauthorized()
-                .json(
-                    respData
-                )
-        }
-    };
-
-    // check if members are empty 
-    if req.members.is_empty() {
-        respData.message = "Validation error, Circle must have a member".to_string();
-        respData.server_message = Some("Circle must have a member".to_string());
-        respData.data = None;
-        return HttpResponse::BadRequest().json(respData)
-    }
-
-    
-    let mut circle = Circle{
-        id: uuid::Uuid::new_v4().to_string(),
-        name: req.name.clone(),
-        display_name: req.display_name.clone(),
-        owner: claim.user_name.clone(),
-        members: req.members.clone(),
-        is_private: false,
-        image: req.image.clone(),
-        created_at: get_current_time_stamp(),
-        updated_at:get_current_time_stamp()
-    };
- 
-
-    
-    match CircleService::create_circle(&database.db, &circle).await{
-        Ok(_)=>{},
-        Err(err)=>{
-            log::error!("{}", err)
-        }
-    };
-
-    return HttpResponse::Ok().json({})
-}
+// #[post("/create")]
+// pub async fn create_group_chat(
+//     database:Data<MongoService>,
+//     req: Result<web::Json<CreateGroupChatReq>, actix_web::Error>,
+//     claim:Option<ReqData<Claims>>
+// )->HttpResponse{
+// 
+//     let mut respData = GenericResp::<Chat>{
+//         message:"".to_string(),
+//         server_message: Some("".to_string()),
+//         data: None
+//     };
+//     let req = match req {
+//         Ok(data)=>{data},
+//         Err(err)=>{
+//             log::error!("validation  error  {}", err.to_string());
+//             respData.message = "Validation error".to_string();
+//             respData.server_message = Some(err.to_string());
+//             respData.data = None;
+//             return HttpResponse::InternalServerError().json( respData); 
+//         }
+//     };
+// 
+//     let claim = match claim {
+//         Some(claim)=>{claim},
+//         None=>{
+//             respData.message = "Unauthorized".to_string();
+// 
+//             return HttpResponse::Unauthorized()
+//                 .json(
+//                     respData
+//                 )
+//         }
+//     };
+// 
+//     // check if members are empty 
+//     if req.members.is_empty() {
+//         respData.message = "Validation error, Circle must have a member".to_string();
+//         respData.server_message = Some("Circle must have a member".to_string());
+//         respData.data = None;
+//         return HttpResponse::BadRequest().json(respData)
+//     }
+// 
+//     
+//     let mut circle = Circle{
+//         id: uuid::Uuid::new_v4().to_string(),
+//         name: req.name.clone(),
+//         display_name: req.display_name.clone(),
+//         owner: claim.user_name.clone(),
+//         members: req.members.clone(),
+//         is_private: false,
+//         image: req.image.clone(),
+//         created_at: get_current_time_stamp(),
+//         updated_at:get_current_time_stamp()
+//     };
+//  
+// 
+//     
+//     match CircleService::create_circle(&database.db, &circle).await{
+//         Ok(_)=>{},
+//         Err(err)=>{
+//             log::error!("{}", err)
+//         }
+//     };
+// 
+//     return HttpResponse::Ok().json({})
+// }
 
 
 //get group chats
-#[get("/get_chats/{name}")]
-pub async fn get_group_chats(
-    database:Data<MongoService>,
-    path: web::Path<ChatPathName>,
-    claim:Option<ReqData<Claims>>
-)->HttpResponse{
-   
-    let mut respData = GenericResp::<Vec<Chat>>{
-        message:"".to_string(),
-        server_message: Some("".to_string()),
-        data: None
-    };
-
-    let chats = match ChatService::get_chats_by_pair_id(&database.db, path.name.clone()).await{
-        Ok(data)=>{
-            data
-        },
-        Err(err)=>{
-            log::error!("{}", err);
-            respData.message = "Error getting chats data".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::InternalServerError().json(respData);   
-        }
-    };
-
-    respData.message = "Ok".to_string();
-    respData.server_message = None;
-    respData.data = Some(chats);
-    return HttpResponse::Ok().json(respData)
-
-}
+// #[get("/get_chats/{name}")]
+// pub async fn get_group_chats(
+//     database:Data<MongoService>,
+//     path: web::Path<ChatPathName>,
+//     claim:Option<ReqData<Claims>>
+// )->HttpResponse{
+//    
+//     let mut respData = GenericResp::<Vec<Chat>>{
+//         message:"".to_string(),
+//         server_message: Some("".to_string()),
+//         data: None
+//     };
+// 
+//     let chats = match ChatService::get_chats_by_pair_id(&database.db, path.name.clone()).await{
+//         Ok(data)=>{
+//             data
+//         },
+//         Err(err)=>{
+//             log::error!("{}", err);
+//             respData.message = "Error getting chats data".to_string();
+//             respData.server_message = Some(err.to_string());
+//             respData.data = None;
+//             return HttpResponse::InternalServerError().json(respData);   
+//         }
+//     };
+// 
+//     respData.message = "Ok".to_string();
+//     respData.server_message = None;
+//     respData.data = Some(chats);
+//     return HttpResponse::Ok().json(respData)
+// 
+// }
 
 //get circle
-#[get("/get_circle/{name}")]
-pub async fn get_circle(
-    database:Data<MongoService>,
-    path: web::Path<ChatPathName>,
-    claim:Option<ReqData<Claims>>
-)->HttpResponse{
-    let mut respData = GenericResp::<Circle>{
-        message:"".to_string(),
-        server_message: Some("".to_string()),
-        data: None
-    };
-
-    let circle = match CircleService::get_circle(&database.db, path.name.clone()).await{
-        Ok(data)=>{
-            match data{
-                Some(data)=>{data},
-                None=>{
-                    respData.message = "No circle found".to_string();
-                    respData.server_message = None;
-                    respData.data = None;
-                    return HttpResponse::BadRequest().json(respData);  
-                }
-            }
-        },
-        Err(err)=>{
-            log::error!("{}", err);
-            respData.message = "Error getting circle data".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::InternalServerError().json(respData);
-        }
-    };
-
-    respData.message = "Ok".to_string();
-    respData.server_message = None;
-    respData.data = Some(circle);
-    return HttpResponse::Ok().json(respData)
-
-}
+// #[get("/get_circle/{name}")]
+// pub async fn get_circle(
+//     database:Data<MongoService>,
+//     path: web::Path<ChatPathName>,
+//     claim:Option<ReqData<Claims>>
+// )->HttpResponse{
+//     let mut respData = GenericResp::<Circle>{
+//         message:"".to_string(),
+//         server_message: Some("".to_string()),
+//         data: None
+//     };
+// 
+//     let circle = match CircleService::get_circle(&database.db, path.name.clone()).await{
+//         Ok(data)=>{
+//             match data{
+//                 Some(data)=>{data},
+//                 None=>{
+//                     respData.message = "No circle found".to_string();
+//                     respData.server_message = None;
+//                     respData.data = None;
+//                     return HttpResponse::BadRequest().json(respData);  
+//                 }
+//             }
+//         },
+//         Err(err)=>{
+//             log::error!("{}", err);
+//             respData.message = "Error getting circle data".to_string();
+//             respData.server_message = Some(err.to_string());
+//             respData.data = None;
+//             return HttpResponse::InternalServerError().json(respData);
+//         }
+//     };
+// 
+//     respData.message = "Ok".to_string();
+//     respData.server_message = None;
+//     respData.data = Some(circle);
+//     return HttpResponse::Ok().json(respData)
+// 
+// }
 
 
 // connect chat with websocket
@@ -476,7 +479,7 @@ pub async fn we_chat_connect(
     stream: web::Payload,
     data: web::Data<UserConnections>,
     claim:Option<ReqData<Claims>>,
-    database:Data<MongoService>,
+    pool:Data<PgPool>,
 ) -> Result<HttpResponse, Error> {
     let claim = match claim {
         Some(claim)=>{claim},
@@ -489,7 +492,7 @@ pub async fn we_chat_connect(
 
     let (response,session, mut msg_stream) = handle(&req, stream)?;
     actix_web::rt::spawn(async move {
-        chat_ws_service(session,  msg_stream, claim.user_name.to_owned(), data, &database.db).await;
+        chat_ws_service(session,  msg_stream, claim.user_name.to_owned(), data, &pool).await;
     });
     
     Ok(response)

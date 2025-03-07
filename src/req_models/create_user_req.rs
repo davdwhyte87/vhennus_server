@@ -1,12 +1,12 @@
 
 use serde_derive::{Deserialize, Serialize};
-use crate::models::user::UserType;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateUserReq{
     pub user_name:String,
     pub password:String,
-    pub user_type:UserType
+    pub user_type:String
 }
 
 #[derive(Debug, Serialize, Deserialize)]

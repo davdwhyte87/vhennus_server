@@ -5,7 +5,6 @@ use actix_web::{dev::{forward_ready, Service, ServiceRequest, ServiceResponse, T
 use actix_web::error::ErrorUnauthorized;
 use actix_web::web::head;
 use futures_util::future::LocalBoxFuture;
-use crate::models::user::UserType;
 use crate::utils::auth::decode_token;
 
 // There are two steps in middleware processing.

@@ -3,10 +3,7 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use std::{default, string::ToString};
 use strum_macros;
-
-use super::{buy_order::BuyOrder, payment_method::{PaymentMethod, PaymentMethodData}, trivia_question::TriviaQuestion, user::UserType};
-
-
+use crate::models::trivia_question::TriviaQuestion;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct TriviaGame {

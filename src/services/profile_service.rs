@@ -1,257 +1,132 @@
 
+
 use std::{error::Error, vec};
+use chrono::NaiveDateTime;
 
 use futures::{future::OkInto, StreamExt, TryStreamExt};
 use mongodb::{bson::{doc, from_document, Regex}, results::{InsertOneResult, UpdateResult}, Database};
 use r2d2_mongodb::mongodb::coll;
-
-use crate::{models::{buy_order::BuyOrder, post::Post, profile::Profile, sell_order::SellOrder, user::User}, utils::general::get_current_time_stamp};
-
-use super::{mongo_service::MongoService, post_service::POST_SERVICE_COLLECTION, user_service::USER_COLLECTION};
-
-
+use serde_derive::{Deserialize, Serialize};
+use sqlx::PgPool;
+use crate::models::profile::Profile;
 pub const PROFILE_COLLECTION:&str = "Profile";
 
 pub struct  ProfileService{
 
 }
 
+#[derive(Serialize, Debug, Deserialize, Clone)]
+pub struct MiniProfile{
+    pub user_name:String,
+    pub image: Option<String>,
+    pub bio:Option<String>,
+    pub name: Option<String>
+}
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct ProfileWithFriends{
+    profile: Profile,
+    friends: Vec<MiniProfile>
+}
 impl ProfileService {
-    pub async fn get_user_profile(db:&Database, user_name:String)->Result<Profile, Box<dyn Error>>{
-        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
-        let lookup_3 = doc! {
-            "$lookup":
-               {
-                  "from": "Profile",
-                  "localField": "friends",
-                  "foreignField": "user_name",
-                  "as": "friends_models"
-               }
-        };
 
-        let match_ = doc! {
-            "$match":{
-                "user_name": user_name.clone()
-            }
-        };
-
-        let pipeline = vec![match_, lookup_3];
-        let mut res = match collection.aggregate(pipeline).await{
-            Ok(data)=>{data},
+    pub async fn get_profile(pool:&PgPool, xuser_name:String)->Result<Profile, Box<dyn Error>>{
+        let profile = sqlx::query_as!(Profile,
+            "SELECT * FROM profiles WHERE user_name = $1", xuser_name)
+            .fetch_one(pool)
+            .await;
+        let profile = match profile{
+            Ok(profile)=>profile,
             Err(err)=>{
-                log::error!(" error fetching profile data  {}", err.to_string());
-                return Err(err.into())   
+                return Err(Box::new(err));
             }
         };
+        return Ok(profile);
+    }
+    pub async fn get_profile_with_friend(pool:&PgPool, xuser_name:String)->Result<ProfileWithFriends, Box<dyn Error>>{
 
-        let mut profiles:Vec<Profile> = vec![];
-        while let Some(data) = res.try_next().await?{
-            let profile:Profile = from_document(data)?;
-            profiles.push(profile);
-        }
-
-        let profile = match profiles.get(0){
-            Some(data)=>{
-                return Ok(data.clone())
-            },
-            None=>{
-                // create 
-                let new_profile  = Profile{
-                    id: uuid::Uuid::new_v4().to_string(),
-                    user_name: user_name.clone(),
-                    bio: "".to_string(),
-                    name: "".to_string(),
-                    occupation: "".to_string(),
-                    created_at: get_current_time_stamp(),
-                    image:"".to_string(),
-                    updated_at: get_current_time_stamp(),
-                    friends: vec![],
-                    friends_models: None,
-                    app_f_token: None
-                };
-
-                // create profile 
-                match collection.insert_one(new_profile.clone()).await{
-                    Ok(_)=>{},
-                    Err(err)=>{
-                        log::error!(" error creating profile data  {}", err.to_string());
-                        return Err(err.into()) 
-                    }
-                };
-
-                new_profile
+        let profile = sqlx::query_as!(Profile,
+            "SELECT * FROM profiles WHERE user_name = $1", xuser_name)
+            .fetch_one(pool)
+            .await;
+        let profile = match profile{
+            Ok(profile)=>profile,
+            Err(err)=>{
+                return Err(Box::new(err));
             }
         };
+        let friends = sqlx::query_as!(MiniProfile,
+        "SELECT p.user_name, p.image, p.bio, p.name FROM profiles p
+         JOIN friends f ON p.user_name = f.friend_username OR p.user_name = f.user_username
+         WHERE (f.user_username = $1 OR f.friend_username = $1) 
+           AND p.user_name <> $1
+        ", xuser_name).fetch_all(pool).await?;
         
-        return Ok(profile)
+        let result = ProfileWithFriends{profile, friends};
+        return Ok(result);
     }
 
+    pub async fn update_profile(
+        pool: &PgPool,
+        profile:Profile
+    ) -> Result<MiniProfile, Box<dyn Error>> {
+        
+        let updated_profile = sqlx::query_as!(
+        MiniProfile,
+        "UPDATE profiles
+         SET 
+             name = COALESCE($2, name),
+             bio = COALESCE($3, bio),
+             image = COALESCE($4, image)
+         WHERE user_name = $1
+         RETURNING user_name, name, bio, image",
+        profile.user_name,
+        profile.name,
+        profile.bio,
+        profile.image
+        )
+            .fetch_one(pool)
+            .await?;
+        return Ok(updated_profile)
+    }
 
-    pub async fn search(db:&Database, data:String)->Result<Vec<Profile>, Box<dyn Error>>{
-        // let filter =  doc! { "user_name": { "$regex": data, "$options": "i" } };
+    pub async fn search_users(pool: &PgPool, search_term: String) -> Result<Vec<MiniProfile>, Box<dyn std::error::Error>> {
+        let query_param = format!("%{}%", search_term); // Add wildcard for partial match
 
-        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
-
-        let trimmed_data = data.trim();
-        //let escaped_data = regex::escape(trimmed_data);
-        let words: Vec<&str> = trimmed_data.split_whitespace().collect();
-        let regex_pattern = if words.is_empty() {
-            "".to_string()
-        } else {
-            words
-                .iter()
-                .map(|word| format!("(?=.*{})", regex::escape(word))) // Lookahead assertion
-                .collect::<String>()
-        };
-        let regex = Regex {
-            pattern: regex_pattern,
-            options: "i".to_string(),
-        };
-        let filter =doc! {
-            "$or": [
-                doc! { "user_name": { "$regex": &regex } },
-                doc! { "name": { "$regex": &regex } },
-            ]
-        };
-
-        let mut cursor = match collection.find(filter).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error fetching profile data  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
-        let mut profiles:Vec<Profile> = vec![];
-        while  let Some(data) = cursor.try_next().await? {  
-            profiles.push(data);
-        }
+        let profiles = sqlx::query_as!(
+        MiniProfile,
+            "SELECT user_name, name, bio, image 
+             FROM profiles
+             WHERE user_name ILIKE $1 
+                OR name ILIKE $1 
+                OR bio ILIKE $1",
+            query_param
+        )
+            .fetch_all(pool)
+            .await?;
 
         Ok(profiles)
     }
 
-    pub async fn get_profile(db:&Database, user_name:String)->Result<Profile, Box<dyn Error>>{
-        // Get a handle to a collection in the database.
-        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
 
-        let profile = match collection.find_one(doc! {"user_name": user_name}).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error fetching profile data  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
+    pub async fn user_exists(pool: &PgPool, user_name: &str) -> Result<bool, sqlx::Error> {
+        let exists = sqlx::query_scalar!(
+        "SELECT EXISTS (SELECT 1 FROM users WHERE user_name = $1)",
+        user_name
+        )
+            .fetch_one(pool)
+            .await?;
 
-
-        match profile {
-            Some(data)=>{return Ok(data)},
-            None=>{
-                return Ok(Profile::default())
-            }
-        }
+        Ok(exists.unwrap_or(false))
     }
 
-    pub async fn update_profile(db:&Database, profile:&Profile)->Result<UpdateResult, Box<dyn Error>>{
-        // Get a handle to a collection in the database.
-        let collection = db.collection::<Profile>(PROFILE_COLLECTION);
+    pub async fn profile_exists(pool: &PgPool, user_name: &str) -> Result<bool, sqlx::Error> {
+        let exists = sqlx::query_scalar!(
+        "SELECT EXISTS (SELECT 1 FROM profiles WHERE user_name = $1)",
+        user_name
+    )
+            .fetch_one(pool)
+            .await?;
 
-
-        // get profile
-        
-        let ex_profile = match collection.find_one(doc! {"user_name":profile.user_name.clone()}).await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error fetching profile data  {}", err.to_string());
-                return Err(err.into())   
-            }
-        };
-
-        match ex_profile{
-            Some(data)=>{},
-            None => {
-                // if  no profile exists, create one
-                
-                match collection.insert_one(profile).await{
-                    Ok(data)=>{data},
-                    Err(err)=>{
-                        log::error!(" error inserting profile data  {}", err.to_string());
-                        return Err(err.into())   
-                    }
-                };
-            }
-        };
-
-        // update profile
-        let update_data = doc! {"$set":doc! {
-            "bio":profile.bio.to_owned().clone(),
-            "name":profile.name.clone(),
-            "occupation": profile.occupation.clone(),
-            "image": profile.image.clone(),
-            "updated_at": chrono::offset::Utc::now().to_string(),
-            "app_f_token": profile.app_f_token.clone()
-           
-        }};
-        let res =collection.update_one(doc! {"user_name":profile.user_name.clone()}, update_data).await;
-
-        let res = match res {
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!(" error updating into db  {}", err.to_string());
-                return Err(err.into())
-            }
-        };
-        Ok(res)
-    }
-
-
-    pub async  fn  delete_account(db:&Database, userName:String)->Result<(), Box<dyn Error>>{
-        
-        let mut  session = match db.client().start_session().await{
-            Ok(data)=>{data},
-            Err(err)=>{
-                log::error!("error creating database session {}", err);
-                return Err(err.into());
-            }
-        };
-        match session.start_transaction().await{
-            Ok(data)=>{},
-            Err(err)=>{
-                log::error!("error creating session transaction  {}", err);
-                return Err(err.into());   
-            }
-        };
-
-        let user_collection = session.client().database(&MongoService::get_db_name()).collection::<User>(USER_COLLECTION);
-        let profile_collection = session.client().database(&MongoService::get_db_name()).collection::<Profile>(PROFILE_COLLECTION);
-        let post_collection = session.client().database(&MongoService::get_db_name()).collection::<Post>(POST_SERVICE_COLLECTION);
-        // delete all posts
-        match post_collection.delete_many(doc! {"user_name": userName.clone()}).await{
-            Ok(_)=>{},
-            Err(err)=>{
-                log::error!("error deleting all posts .. {}", err);
-                match session.abort_transaction().await{
-                    Ok(x)=>{},
-                    Err(err)=>{log::error!("abort error {}", err)}
-                };
-            }
-        }
-
-        // update user document
-        match user_collection.update_one(doc! {"user_name":userName.clone()},
-         doc! {"$set":doc! {
-            "is_deleted":true
-         }}).await {
-            Ok(_)=>{},
-            Err(err)=>{
-                log::error!("error updating user document .. {}", err);
-                match session.abort_transaction().await{
-                    Ok(x)=>{},
-                    Err(err)=>{log::error!("abort error {}", err)}
-                }; 
-            }
-        }
-
-        // commit data changes
-        session.commit_transaction().await;
-        Ok(())
+        Ok(exists.unwrap_or(false))
     }
 }

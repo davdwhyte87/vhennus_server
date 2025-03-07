@@ -42,3 +42,5 @@ Seller can:
 - cancel sell order 
 
 when the first person requests for a new game, the server gets todays question and creates the game Subsequest users will get todays game. and answer. 
+deissel notes: use this when working with rust rover` diesel print-schema | Out-File -Encoding utf8 src\schema.rs
+`

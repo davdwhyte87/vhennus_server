@@ -12,5 +12,6 @@ pub mod system_controller;
 pub mod trivia_game_controller;
 pub mod  profile_controller;
 pub mod chats_controller;
+pub mod service_errors;
 
 pub const DIAGNOSIS_CONTROLLER_PATH:&str = "/api/v1";

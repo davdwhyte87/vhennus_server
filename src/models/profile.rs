@@ -4,9 +4,8 @@ use bigdecimal::BigDecimal;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use std::{default, string::ToString};
+use chrono::NaiveDateTime;
 use strum_macros;
-
-use super::{buy_order::BuyOrder, comment::Comment, payment_method::{PaymentMethod, PaymentMethodData}, user::UserType};
 
 
 
@@ -14,13 +13,18 @@ use super::{buy_order::BuyOrder, comment::Comment, payment_method::{PaymentMetho
 pub struct Profile {
     pub id: String,
     pub user_name:String, 
-    pub bio: String,
-    pub name:String,
-    pub occupation:String, 
-    pub image:String,
-    pub created_at:String,
-    pub updated_at:String,
-    pub friends:Vec<String>,
-    pub friends_models:Option<Vec<Profile>>,
+    pub bio: Option<String>,
+    pub name:Option<String>,
+    pub image:Option<String>,
+    pub created_at:NaiveDateTime,
+    pub updated_at:NaiveDateTime,
     pub app_f_token: Option<String> // app firebase token
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct Friend{
+    pub id:i32,
+    pub user_username:String,
+    pub friend_username:String,
 }

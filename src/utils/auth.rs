@@ -2,12 +2,12 @@ use std::error::Error;
 use chrono::Utc;
 use jsonwebtoken::{encode, decode, EncodingKey, Header, DecodingKey, Validation};
 use serde_derive::{Deserialize, Serialize};
-use crate::models::user::UserType;
+
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims{
-    pub role:UserType,
+    pub role:String,
     pub email: String,
     pub user_name:String,
     pub exp:usize
@@ -15,7 +15,7 @@ pub struct Claims{
 
 
 
-pub fn encode_token(role: UserType, email:String, name:String)->Result<String, Box<dyn Error>>{
+pub fn encode_token(role: String, email:String, name:String) ->Result<String, Box<dyn Error>>{
     let expiration = Utc::now()
         .checked_add_signed(chrono::Duration::days(365))
         .expect("valid timestamp")
