@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Set variables
+PROJECT_DIR="/root/vhennus_server"
+SERVICE_NAME="test.vhennus"
+BUILD_DIR="$PROJECT_DIR/target/release"
+EXECUTABLE_NAME="vhennus_server"
+
+# Navigate to project directory
+cd "$PROJECT_DIR" || { echo "Failed to change directory to $PROJECT_DIR"; exit 1; }
+
+# Force pull latest changes
+git reset --hard
+if ! git pull origin develop; then
+    echo "Failed to pull latest changes from GitHub"
+    exit 1
+fi
+
+# Build the Rust project
+if ! cargo build --release; then
+    echo "Build failed"
+    exit 1
+fi
+
+# Copy the built executable to the project root
+if [ -f "$BUILD_DIR/$EXECUTABLE_NAME" ]; then
+    cp "$BUILD_DIR/$EXECUTABLE_NAME" "$PROJECT_DIR/build"
+else
+    echo "Build output not found"
+    exit 1
+fi
+
+# Restart the systemd service
+if ! sudo systemctl restart "$SERVICE_NAME"; then
+    echo "Failed to restart service $SERVICE_NAME"
+    exit 1
+fi
+
+echo "Deployment successful"
