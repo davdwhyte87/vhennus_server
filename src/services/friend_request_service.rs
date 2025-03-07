@@ -1,3 +1,4 @@
+
 use crate::models::fried_request::FriendRequest;
 use std::error::Error;
 use chrono::NaiveDateTime;
@@ -11,6 +12,8 @@ use crate::services::user_service::UserService;
 
 use serde_derive::Serialize;
 use sqlx::{PgPool, Postgres, Transaction};
+use thiserror::Error;
+use crate::controllers::service_errors::ServiceError;
 use crate::models::profile::Friend;
 use crate::services::profile_service::ProfileService;
 
@@ -30,6 +33,8 @@ pub struct FriendRequestWithProfile{
     pub name:Option<String>,
     pub image:Option<String>,
 }
+
+
 
 impl FriendRequestService {
 
@@ -55,6 +60,16 @@ impl FriendRequestService {
             .fetch_one(pool).await?;
         Ok(fr)
     }
+
+    pub async fn get_single_friend_request_by_users(pool:&PgPool, requester:String, user:String)->Result<Option<FriendRequest>, ServiceError>{
+        let fr = sqlx::query_as!(FriendRequest, "
+            SELECT *    
+            FROM friend_requests 
+            WHERE requester = $1 AND user_name=$2
+            " , requester, user)
+            .fetch_optional(pool).await?;
+        Ok(fr)
+    }
     
     // pub async fn get_single_friend_request(db:&Database, id:String)->Result<Option<FriendRequest>, Box<dyn Error>>{
     //     // Get a handle to a collection in the database.
@@ -73,10 +88,17 @@ impl FriendRequestService {
     // }
 
 
-    pub async fn create_friend_request(pool:&PgPool, request:FriendRequest)->Result<(),Box<dyn Error>>{
+    pub async fn create_friend_request(pool:&PgPool, request:FriendRequest)->Result<(), ServiceError>{
         // check if the user exists
-        ProfileService::user_exists(pool, &*request.requester.clone()).await?;
-        ProfileService::user_exists(pool, &*request.user_name.clone()).await?;
+        ProfileService::user_exists(pool, &*request.requester.clone()).await
+            .map_err(|_| ServiceError::UserNotFound)?;
+        ProfileService::user_exists(pool, &*request.user_name.clone()).await
+            .map_err(|_| ServiceError::UserNotFound)?;
+        //check if it exists 
+        let frr = Self::get_single_friend_request_by_users(pool, request.requester.clone(), request.user_name.clone()).await?;
+        if frr.is_some(){
+            return Err(ServiceError::FriendRequestExists);
+        }
         // create friend request
         let res = sqlx::query_as!(FriendRequest, "
           INSERT INTO friend_requests (id,user_name,requester, status, created_at, updated_at)

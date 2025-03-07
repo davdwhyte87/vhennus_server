@@ -31,23 +31,42 @@ impl ChatService {
         if chat_pair.is_some() {
             chat_pair_id = chat_pair.unwrap().id;
         }else{
+            // create chat pair and then chat 
             chat_pair_id = Uuid::new_v4().to_string();
             let chat_pair = ChatPair{
                 id: chat_pair_id.clone(),
                 user1: chat.sender.clone(),
                 user2: chat.receiver.clone(),
-                last_message: None,
+                last_message: Option::from(chat.message.clone()),
                 all_read: false,
                 created_at: get_time_naive(),
                 updated_at: get_time_naive(),
             };
             ChatPairService::create_chat_pair(pool, &chat_pair).await?;
+            // construct new chat 
+            let mut chat = chat;
+            chat.id =  Uuid::new_v4().to_string();
+            chat.pair_id = chat_pair_id;
+            chat.created_at = get_time_naive();
+            chat.updated_at = get_time_naive();
+
+            let result  = chat.clone();
+
+            //create chat 
+            let res = sqlx::query_as!(Chat, "
+            INSERT INTO chats (id,sender,receiver,message, image,created_at,updated_at, pair_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+            ", chat.id,chat.sender, chat.receiver,chat.message,chat.image
+            ,chat.created_at,chat.updated_at,chat.pair_id)
+                .execute(pool).await?;
+            
+            return Ok(result);
         }
         
         // construct new chat 
         let mut chat = chat;
         chat.id =  Uuid::new_v4().to_string();
-        chat.pair_id = chat_pair_id;
+        chat.pair_id = chat_pair_id.clone();
         chat.created_at = get_time_naive();
         chat.updated_at = get_time_naive();
         
@@ -61,6 +80,8 @@ impl ChatService {
             ,chat.created_at,chat.updated_at,chat.pair_id)
             .execute(pool).await?;
         
+        // update pair
+        ChatPairService::update_chat_pair(pool,chat_pair_id.clone(), result.message.clone()).await?;
         Ok(result)
     }
 

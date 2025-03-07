@@ -22,7 +22,7 @@ pub async fn create_post(
     let mut respData = GenericResp::<Post>{
         message:"".to_string(),
         server_message: Some("".to_string()),
-        data: Some(Post::default())
+        data: None
     };
 
     let req = match req {

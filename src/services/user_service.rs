@@ -62,7 +62,7 @@ impl UserService{
         
         if user_insert.is_err(){
             let _ = tx.rollback().await;
-            return Err("Failed to create user".into());
+            return Err(user_insert.err().unwrap().description().into());
         }
         let profile_insert = sqlx::query!(
             "INSERT INTO profiles (id,user_name) 

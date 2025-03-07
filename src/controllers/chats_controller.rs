@@ -4,7 +4,7 @@ use mongodb::bson::doc;
 use serde::Deserialize;
 use sqlx::PgPool;
 use crate::{models::{chat::Chat, chat_pair::ChatPair, circle::Circle, request_models::{CreateChatReq, CreateGroupChatReq}, response::GenericResp}, services::{chat_pair_service::ChatPairService, chat_service::ChatService, chat_session_service::{chat_ws_service, UserConnections}, circle_service::CircleService, mongo_service::MongoService, user_service::UserService}, utils::{auth::Claims, general::get_current_time_stamp}};
-
+use crate::models::chat_pair::ChatPairView;
 
 #[post("/create")]
 pub async fn create_chat(
@@ -245,7 +245,7 @@ pub async fn find_chat_pair(
     path:web::Path<FindChatPairPath>
 )->HttpResponse{
 
-    let mut respData = GenericResp::<ChatPair>{
+    let mut respData = GenericResp::<ChatPairView>{
         message:"".to_string(),
         server_message: Some("".to_string()),
         data: None
@@ -290,7 +290,7 @@ pub async fn get_my_chat_pairs(
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
 
-    let mut respData = GenericResp::<Vec<ChatPair>>{
+    let mut respData = GenericResp::<Vec<ChatPairView>>{
         message:"".to_string(),
         server_message: Some("".to_string()),
         data: None

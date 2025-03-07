@@ -13,6 +13,7 @@ use serde::Deserialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
+use crate::controllers::service_errors::ServiceError;
 use crate::database::db::db::DB;
 use crate::models::fried_request::{FriendRequest, FriendRequestStatus};
 use crate::models::helper::EmailData;
@@ -122,6 +123,25 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
         return HttpResponse::BadRequest()
             .json(resp_data)
     }
+    match ProfileService::user_exists(&pool, &*new_user.user_name.clone()).await{
+        Ok(user) => {
+            if(user){
+                resp_data.message = "User already exists".to_string();
+                resp_data.server_message =None;
+                resp_data.data = None;
+                return HttpResponse::BadRequest()
+                    .json(resp_data)
+            }
+        },
+        Err(e) => {
+            log::error!("error getting user data {}", e );
+            resp_data.message = "Error getting user".to_string();
+            resp_data.server_message = Option::from(e.to_string());
+            resp_data.data = None;
+            return HttpResponse::InternalServerError()
+                .json(resp_data)
+        }
+    }
     
     let user = User{
         user_name:new_user.user_name.to_owned(),
@@ -133,6 +153,8 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
         password_hash: hashed_password,
         is_deleted:false
     };
+
+
     
     // setup player data if the user is a player
     if user.user_type == "USER"{
@@ -803,15 +825,25 @@ pub async fn send_friend_request(
 
     match FriendRequestService::create_friend_request(&pool, friend_request.clone()).await{
         Ok(data)=>{data}, 
-        Err(err)=>{
+        Err(ServiceError::FriendRequestExists)=>{
+            respData.message = "Friend request already sent!".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData);
+        }
+        Err(ServiceError::DatabaseError(err))=>{
             respData.message = "Error creating friend request".to_string();
-            if (err.to_string() == "FRIEND_REQUEST_EXISTS"){
-                respData.message = "Friend request already sent!".to_string();   
-            }
             respData.server_message = Some(err.to_string());
             respData.data = None;
             log::error!("error creating friend request {}", err);
             return HttpResponse::InternalServerError().json(respData);
+        }
+        _ => {
+            respData.message = "Error creating friend request".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            log::error!("unexpected error creating friend request ___",);
+            return HttpResponse::InternalServerError().json(respData); 
         }
     };
 
