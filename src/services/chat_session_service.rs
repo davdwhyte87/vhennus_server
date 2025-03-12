@@ -1,4 +1,4 @@
-
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder};
@@ -115,6 +115,8 @@ pub async fn chat_ws_service(
                         };
                         log::debug!("got profile :{}", profile.user_name.clone());
                         // send notification if the user has a token
+                        let mut data_map = HashMap::new();
+                        data_map.insert("user_name".to_string(), profile.user_name.clone());
                         if profile.app_f_token.is_some() {
                             let payload = FcmMessage {
                                 message: MessagePayload {
@@ -122,9 +124,9 @@ pub async fn chat_ws_service(
                                     notification: Notification {
                                         title: res_chat.receiver.clone(),
                                         body: truncate_string(res_chat.message.clone()),
-                                        user_name: profile.user_name.clone(),
+                                      
                                     },
-                                    data: None,
+                                    data: Some(data_map),
                                 },
                             };
 

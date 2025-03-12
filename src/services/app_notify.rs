@@ -30,7 +30,6 @@ pub struct MessagePayload {
 pub struct Notification {
     pub title: String,
     pub body: String,
-    pub user_name: String
 }
 
 pub async fn send_app_notification(payload: FcmMessage) -> Result<(), Box<dyn Error>> {
