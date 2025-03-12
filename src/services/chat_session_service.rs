@@ -122,6 +122,7 @@ pub async fn chat_ws_service(
                                     notification: Notification {
                                         title: res_chat.receiver.clone(),
                                         body: truncate_string(res_chat.message.clone()),
+                                        user_name: profile.user_name.clone(),
                                     },
                                     data: None,
                                 },
