@@ -181,6 +181,55 @@ pub async fn get_my_posts(
 }
 
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+struct GetUsersPosts{
+    user_name:String,
+}
+#[get("/all/{user_name}")]
+pub async fn get_users_posts(
+    pool:Data<PgPool>,
+    claim:Option<ReqData<Claims>>,
+    path: web::Path<GetUsersPosts>
+)->HttpResponse{
+
+    let mut respData = GenericResp::<Vec<PostFeed>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+    println!("new req");
+
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+
+            return HttpResponse::Unauthorized()
+                .json(
+                    respData
+                )
+        }
+    };
+
+    let posts = match PostService::get_user_posts(&pool, path.user_name.clone()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!(" error getting posts {}", err.to_string());
+            respData.message = "Error getting posts".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json( respData);
+        }
+    };
+
+    respData.message = "".to_string();
+    respData.server_message = None;
+    respData.data = Some(posts);
+    return HttpResponse::Ok().json( respData);
+
+}
+
+
 #[derive(Deserialize)]
 struct GetSinglePostPath {
     id: String,
@@ -311,7 +360,7 @@ pub async fn like_post(
 
     
 
-    match PostService::like_post(&pool, path.id.clone(),claim.user_name.clone()).await{
+    match PostService::toggle_like(&pool, path.id.clone(),claim.user_name.clone()).await{
         Ok(_)=>{},
         Err(err)=>{
             log::error!("error updating post {}", err.to_string());

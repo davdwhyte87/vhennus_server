@@ -58,10 +58,10 @@ pub async fn get_user_profile(
     claim:Option<ReqData<Claims>>,
     path: web::Path<GetUserProfilePath>
 )->HttpResponse{
-    let mut respData = GenericResp::<Profile>{
+    let mut respData = GenericResp::<ProfileWithFriends>{
         message:"".to_string(),
         server_message: Some("".to_string()),
-        data: Some(Profile::default())
+        data: None
     };
 
     let claim = match claim {
@@ -77,7 +77,7 @@ pub async fn get_user_profile(
     };
 
     // get by username
-    let profile = match ProfileService::get_profile(&pool, path.username.clone()).await{
+    let profile = match ProfileService::get_profile_with_friend(&pool, path.username.clone()).await{
         Ok(data)=>{data},
         Err(err)=>{
             respData.message = "Error getting user profile".to_string();

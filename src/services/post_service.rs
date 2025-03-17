@@ -68,6 +68,39 @@ impl PostService {
             .execute(pool).await?;
         Ok(())
     }
+    pub async fn toggle_like(pool: &PgPool, post_id: String, user_name: String) -> Result<(), Box<dyn Error>> {
+        // Check if the like already exists
+        let existing_like = sqlx::query_scalar!(
+        "SELECT COUNT(*) FROM likes WHERE user_name = $1 AND post_id = $2",
+        user_name,
+        post_id
+    )
+            .fetch_one(pool)
+            .await?;
+
+        if existing_like.unwrap_or(0) > 0 {
+            // Unlike (delete) if already liked
+            sqlx::query!(
+            "DELETE FROM likes WHERE user_name = $1 AND post_id = $2",
+            user_name,
+            post_id
+        )
+                .execute(pool)
+                .await?;
+        } else {
+            // Like (insert) if not already liked
+            sqlx::query!(
+            "INSERT INTO likes (user_name, post_id) VALUES ($1, $2)",
+            user_name,
+            post_id
+        )
+                .execute(pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+
 
 
     pub async fn get_all_post(pool:&PgPool)->Result<Vec<PostFeed>, Box<dyn Error>>{
@@ -136,6 +169,39 @@ impl PostService {
                     "#, user_name).fetch_all(pool).await?;
 
 
+        Ok(posts)
+    }
+
+    pub async fn get_user_posts(pool:&PgPool, user_name:String)->Result<Vec<PostFeed>, Box<dyn Error>>{
+        let posts = sqlx::query_as!(PostFeed, 
+        r#"
+                SELECT
+                    posts.id,
+                    posts.image,
+                    posts.text,
+                    posts.created_at,
+                    posts.updated_at,
+                    posts.user_name,
+                    profiles.name,
+                    profiles.image AS profile_image,
+                    COUNT(DISTINCT likes.user_name) AS like_count,
+                    COUNT(DISTINCT comments.id) AS comment_count
+                FROM posts
+             
+                INNER JOIN profiles ON profiles.user_name = posts.user_name
+                LEFT JOIN likes ON likes.post_id = posts.id
+                LEFT JOIN comments ON comments.post_id = posts.id  
+                WHERE posts.user_name = $1
+                GROUP BY
+                    posts.id,
+                    posts.image,
+                    posts.text,
+                    posts.created_at,
+                    posts.updated_at,
+                    posts.user_name,
+                    profiles.name,
+                    profiles.image
+                    "#, user_name).fetch_all(pool).await?;
         Ok(posts)
     }
 
