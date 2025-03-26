@@ -25,6 +25,7 @@ use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
+use crate::controllers::download_controller::download_apk;
 use crate::models::user::User;
 use crate::services::mongo_service::MongoService;
 mod utils;
@@ -234,6 +235,7 @@ async fn main() -> std::io::Result<()> {
             .service(user_controller::create_account)
             .service(user_controller::login)
             .service(system_controller::get_system_data)
+            .service(download_apk)
             
 
             //

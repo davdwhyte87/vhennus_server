@@ -40,3 +40,4 @@ google-authenticator = "0.4.2"
 gcp_auth = "0.12.3"
 awc = { version = "3.5.1", features = ["rustls"] }
 sqlx = { version = "0.8.3", features = ["postgres", "runtime-tokio", "tls-native-tls","migrate","chrono", "bigdecimal"] }
+actix-files = "0.6.6"

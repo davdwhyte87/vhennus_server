@@ -1,6 +1,7 @@
 
 /target
 /log
+/assets
 service-account.json
 .env
 log4rs.yaml

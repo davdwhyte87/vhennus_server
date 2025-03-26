@@ -14,5 +14,6 @@ pub struct System {
     pub id: i32,
     pub price: BigDecimal,
     pub android_app_version:String,
-    pub trivia_win_amount:BigDecimal
+    pub trivia_win_amount:BigDecimal,
+    pub apk_link:String
 }
