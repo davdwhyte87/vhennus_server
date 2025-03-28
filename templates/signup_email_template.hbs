@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Vhennus</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #6A0DAD; /* Purple */
+            margin-bottom: 10px;
+        }
+        .header {
+            font-size: 22px;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .message {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 20px;
+        }
+        .activation-code {
+            font-size: 24px;
+            font-weight: bold;
+            color: #6A0DAD; /* Purple */
+            padding: 10px 20px;
+            background-color: #f2e6ff; /* Light Purple */
+            border-radius: 5px;
+            display: inline-block;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">Vhennus</div>
+        <div class="header">Welcome to Vhennus, the new digital nation.</div>
+        <div class="message">
+            Thank you for signing up! Here is your activation code:
+        </div>
+        <div class="activation-code">{{code}}</div> <!-- Replace with dynamic code -->
+        <div class="footer">
+            &copy; 2024 Vhennus. All rights reserved.
+        </div>
+    </div>
+</body>
+</html>

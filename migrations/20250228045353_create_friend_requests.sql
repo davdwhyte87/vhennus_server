@@ -8,4 +8,4 @@ CREATE TABLE friend_requests
     created_at TIMESTAMP DEFAULT NOW() NOT NULL ,
     updated_at TIMESTAMP DEFAULT NOW() NOT NULL ,
     UNIQUE (user_name, requester)
-)
+);

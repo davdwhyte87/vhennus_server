@@ -8,4 +8,4 @@ CREATE TABLE chat_pairs(
     all_read BOOLEAN DEFAULT FALSE NOT NULL,
     created_at TIMESTAMP DEFAULT NOW() NOT NULL ,
     updated_at TIMESTAMP DEFAULT NOW() NOT NULL
-)
+);

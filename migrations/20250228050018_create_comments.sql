@@ -5,4 +5,4 @@ CREATE TABLE comments(
      post_id VARCHAR(50)  REFERENCES posts(id) ON DELETE CASCADE NOT NULL ,
      text TEXT NOT NULL ,
      created_at TIMESTAMP DEFAULT NOW() NOT NULL
-)
+);

@@ -6,7 +6,8 @@ use serde_derive::{Deserialize, Serialize};
 pub struct CreateUserReq{
     pub user_name:String,
     pub password:String,
-    pub user_type:String
+    pub user_type:String,
+    pub email:String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

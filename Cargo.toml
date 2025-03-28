@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 actix-rt = "2.8.0"
-actix-web = "4.9.0"
+actix-web = { version = "4.9.0", features = ["rustls-0_20"] }
 actix-web-validator = "6.0.0"
 actix-ws = "0.3.0"
 bcrypt = "0.16.0"
@@ -21,7 +21,7 @@ futures-util = "0.3.26"
 get_if_addrs = "0.5.3"
 handlebars = "4.3.6"
 jsonwebtoken = "8.2.0"
-lettre = { version = "0.11", default-features = false, features = ["native-tls"] }
+lettre = { version = "0.11",features = ["tokio1", "tokio1-native-tls"] }
 log = "0.4.22"
 log4rs = "1.3.0"
 mongodb = "3.0.1"
@@ -41,3 +41,6 @@ gcp_auth = "0.12.3"
 awc = { version = "3.5.1", features = ["rustls"] }
 sqlx = { version = "0.8.3", features = ["postgres", "runtime-tokio", "tls-native-tls","migrate","chrono", "bigdecimal"] }
 actix-files = "0.6.6"
+rustls-pemfile = "1.0.4"
+rustls = "0.20.9"
+once_cell = "1.21.2"
