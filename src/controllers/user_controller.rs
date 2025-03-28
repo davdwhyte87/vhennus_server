@@ -275,6 +275,7 @@ pub async fn login(pool:Data<PgPool>, req:Json<LoginReq>)->HttpResponse{
     struct LoginResp{
         pub token:String,
         pub email_confirmed:bool,
+        pub email:String
     }
     let mut resp_data = GenericResp::<LoginResp>{
         message: "".to_string(),
@@ -367,7 +368,8 @@ pub async fn login(pool:Data<PgPool>, req:Json<LoginReq>)->HttpResponse{
     resp_data.server_message = None;
     resp_data.data = Some(LoginResp{
         token: login_token,
-        email_confirmed: user.email_confirmed
+        email_confirmed: user.email_confirmed,
+        email: user.email.unwrap_or_default()
     });
     return HttpResponse::Ok().json(resp_data)
 

@@ -35,7 +35,6 @@ pub struct  SendFriendReq{
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  LoginReq{
     pub user_name:String,
-    
     pub password:String
 }
 
