@@ -155,8 +155,8 @@ async fn main() -> std::io::Result<()> {
     
     if (app_env == "test" || app_env=="prod"){
         let ssl_config = load_ssl_config(
-            "/etc/letsencrypt/live/bend.vhennus.com/cert.pem",
-            "/etc/letsencrypt/live/bend.vhennus.com/key.pem"
+            "/etc/letsencrypt/live/bend.vhennus.com/fullchain.pem",
+            "/etc/letsencrypt/live/bend.vhennus.com/privkey.pem"
         ).expect("Failed to load ssl config");
         HttpServer::new(move|| {
 
