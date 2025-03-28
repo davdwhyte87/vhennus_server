@@ -2,11 +2,15 @@
 
 # Load environment variables from .env file
 if [ -f build/.env ]; then
-    export $(grep -v '^#' .env | xargs)
+    set -a  # Automatically export variables
+    source build/.env
+    set +a
 else
-    echo ".env file not found!"
+    echo "Error: build/.env file not found!"
     exit 1
 fi
+
+echo "Loaded environment variables successfully!"
 
 if [ "$APP_ENV" = "test" ]; then
     echo "Deploying to TEST environment..."
