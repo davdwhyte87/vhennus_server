@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Load environment variables from .env file
-if [ -f .env ]; then
+if [ -f build/.env ]; then
     export $(grep -v '^#' .env | xargs)
 else
     echo ".env file not found!"
