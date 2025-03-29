@@ -14,6 +14,7 @@ use mongodb::bson::oid::ObjectId;
 use mongodb::results::{InsertOneResult, UpdateResult};
 
 use r2d2_mongodb::mongodb::ErrorCode::{UserNotFound, OK};
+use rand::Rng;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Postgres, Transaction};
 use crate::database::db::db::DB;
@@ -30,6 +31,7 @@ use super::mongo_service::MongoService;
 use super::profile_service::PROFILE_COLLECTION;
 
 use uuid::Uuid;
+use crate::services::email_service::EmailService;
 
 pub const USER_COLLECTION:&str = "User";
 
@@ -49,13 +51,22 @@ impl UserService{
             Err(_) => return Err("Failed to start transaction".into()),
         };
         // check if the user exists
+        if Self::user_email_exists(pool,user.email.clone().unwrap().as_str()).await.unwrap(){
+            return Err(Box::from("UserEmail already exists"));
+        }
+
+
+        let code = rand::thread_rng()
+            .gen_range(100_000..1_000_000) ;
+        //create user
         let user_insert = sqlx::query!(
-            "INSERT INTO users (id, user_name, email, password_hash) 
-             VALUES ($1, $2, $3, $4)",
+            "INSERT INTO users (id, user_name, email, password_hash, code) 
+             VALUES ($1, $2, $3, $4, $5)",
             user.id.clone(),
             user.user_name.clone(),
             user.email.clone(),
             user.password_hash.clone(),
+            code.clone()
         )
             .execute(&mut *tx)
             .await;
@@ -78,6 +89,16 @@ impl UserService{
             let _ = tx.rollback().await;
             return Err("Failed to create profile".into());
         }
+        
+        // send user email
+        match EmailService::send_signup_email(user.email.unwrap(), code.to_string()).await{
+            Ok(email)=>{},
+            Err(err)=>{
+               log::error!("Failed to send signup email: {}", err);
+                let _ = tx.rollback().await;
+                return Err(err);
+            }
+        };
         if let Err(err) = tx.commit().await {
             log::error!("Failed to commit transaction: {}", err);
             return Err("Transaction commit failed".into());
@@ -111,6 +132,65 @@ impl UserService{
         };
         return Ok(user);
     }
+
+    pub async fn get_by_email(pool:&PgPool, email:String)->Result<Option<User>, Box<dyn Error>>{
+        let user =match  sqlx::query_as!(User, 
+        "SELECT * FROM users WHERE email = $1 ", email.clone() )
+            .fetch_optional(pool)
+            .await{
+            Ok(opt) => opt,
+            Err(err) => {
+                return Err(Box::new(err));
+            }
+        };
+        return Ok(user);
+    }
+
+    pub async fn confirm_user_email(pool:&PgPool, email:String, code:String)->Result<(), Box<dyn Error>>{
+        
+        // get user 
+        let user =match Self::get_by_email(pool,email.clone()).await{
+            Ok(user) => { 
+                match user {
+                    Some(user) => {user},
+                    None=>{
+                        return Err(Box::from("User not found"));
+                    }
+                }
+            },
+            Err(err)=>{
+                log::error!("Error getting user");
+                return Err(err);
+            }
+        };
+        if code != user.code.unwrap().to_string(){
+            return Err(Box::from("Wrong code"));
+        }
+        let res = sqlx::query_as!(User,
+        "UPDATE users SET email_confirmed=$1 WHERE email = $2 ",true, email.clone() )
+            .execute(pool).await?;
+
+        Ok(())
+    }
+    
+    pub async fn update_code(pool:&PgPool, email:String)->Result<(), Box<dyn Error>>{
+        let code = rand::thread_rng()
+            .gen_range(100_000..1_000_000) ;
+        
+        let res = sqlx::query_as!(User,
+        "UPDATE users SET code=$1 WHERE email = $2 ",code.clone(), email.clone() )
+            .execute(pool).await?;
+        
+        // send user email
+        match EmailService::send_signup_email(email.clone(), code.to_string()).await{
+            Ok(email)=>{},
+            Err(err)=>{
+                log::error!("Failed to send signup email: {}", err);
+                return Err(err);
+            }
+        };
+        Ok(())
+    }
     
     
     pub async fn delete_user(pool:&PgPool, username:String)->Result<(), Box<dyn Error>>{
@@ -119,6 +199,17 @@ impl UserService{
             .execute(pool).await?;
         
         Ok(())
+    }
+
+    pub async fn user_email_exists(pool: &PgPool, email: &str) -> Result<bool, sqlx::Error> {
+        let exists = sqlx::query_scalar!(
+        "SELECT EXISTS (SELECT 1 FROM users WHERE email = $1)",
+        email
+        )
+            .fetch_one(pool)
+            .await?;
+
+        Ok(exists.unwrap_or(false))
     }
 
     

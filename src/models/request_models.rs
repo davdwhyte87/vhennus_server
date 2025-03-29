@@ -35,8 +35,18 @@ pub struct  SendFriendReq{
 #[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  LoginReq{
     pub user_name:String,
-    
     pub password:String
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  ConfirmAccountReq{
+    pub code:String,
+    pub email:String
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  ResendCodeReq{
+    pub email:String
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]

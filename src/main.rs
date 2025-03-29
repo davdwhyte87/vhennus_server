@@ -1,8 +1,11 @@
 use std::sync::Arc;
 use std::{env, error, fmt};
+
+use std::fs::File;
+use std::io::BufReader;
 use actix_web::error::JsonPayloadError;
 use actix_web::{get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
-use actix_web::web::{resource, route, service, Data, JsonConfig};
+use actix_web::web::{resource, route, service, Data, JsonConfig, ServiceConfig};
 use awc::Client;
 
 mod controllers;
@@ -16,6 +19,10 @@ use dashmap::DashMap;
 use dotenv::dotenv;
 use get_if_addrs::get_if_addrs;
 use log::{debug, error, info};
+use once_cell::sync::Lazy;
+use r2d2_mongodb::mongodb::Error::IoError;
+use rustls::{Certificate, PrivateKey, ServerConfig};
+use rustls_pemfile::{certs, pkcs8_private_keys};
 use models::{response, user};
 mod database;
 use database::db::db;
@@ -73,6 +80,27 @@ async fn init_db_pool_x()-> PgPool{
     //sqlx::migrate!().run(&pool).await.expect("Failed to run migration");
     return pool;
 }
+
+// fn load_rustls_config() -> ServerConfig {
+//     let cert_file = &mut BufReader::new(File::open("cert.pem").expect("Cannot open certificate file"));
+//     let key_file = &mut BufReader::new(File::open("key.pem").expect("Cannot open key file"));
+// 
+//     let cert_chain = rustls_pemfile::certs(cert_file)
+//         .expect("Failed to read certificate")
+//         .into_iter()
+//         .map(Certificate)
+//         .collect();
+// 
+//     let mut keys = rustls_pemfile::pkcs8_private_keys(key_file)
+//         .expect("Failed to read private key");
+// 
+//     ServerConfig::builder()
+//         .with_safe_defaults()
+//         .with_no_client_auth()
+//         .with_single_cert(cert_chain, PrivateKey(keys.remove(0)))
+//         .expect("Failed to create TLS server config")
+// }
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
@@ -122,127 +150,186 @@ async fn main() -> std::io::Result<()> {
     let user_connections: UserConnections = Arc::new(DashMap::new());
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
+
   
-    HttpServer::new(move|| {
+    
+    if (app_env == "test" || app_env=="prod"){
+        let ssl_config = load_ssl_config(
+            "/etc/letsencrypt/live/bend.vhennus.com/fullchain.pem",
+            "/etc/letsencrypt/live/bend.vhennus.com/privkey.pem"
+        ).expect("Failed to load ssl config");
+        HttpServer::new(move|| {
 
-        App::new()
-            .app_data(Data::new(pool.clone()))
-            .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
-            .route("/ws", web::get().to(chat_session_service::ws_chat)) 
-            
-            // USER CONTROLLERS
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+                .configure(configure_services)
+        })
 
-            .service(
-                // all authenticated endpoints
-                web::scope("api/v1/auth")
-                
-                    .service(user_controller::say_hello)
-                    .wrap(middlewares::auth_middleware::AuthM)
-                  
+            .bind_rustls(address, ssl_config)?
+            .run()
+            .await
+    }else if app_env == "local" {
+        HttpServer::new(move|| {
 
-                    // runstats
-                  
-                    .service(wallet_controller::buy_coin)
-                    .service(wallet_controller::get_wallet)
-                    
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+                .configure(configure_services)
+        })
+            .bind(address)?
+            .run()
+            .await
+    }else {
+        panic!("Set Environment config");
+    }
+}
 
-                    // sell order
 
-                    // .service(
-                    //     web::scope("sell_order")
-                    //     .service(sell_order_controller::create_sell_order)
-                    //     .service(sell_order_controller::get_my_sell_orders)
-                    //     .service(sell_order_controller::get_single_sell_order)
-                    //     .service(sell_order_controller::cancel_sell_order)
-                    //     .service(sell_order_controller::update_sell_order)
-                    //     .service(sell_order_controller::get_all_open_sell_orders)
-                    // )
-                    // .service(
-                    //     web::scope("buy_order")
-                    //     .service(buy_order_controller::create_buy_order)
-                    //     .service(buy_order_controller::get_my_buy_orders)
-                    //     .service(buy_order_controller::get_single_buy_order)
-                    //     .service(buy_order_controller::buyer_confirmed)
-                    //     .service(buy_order_controller::seller_confirmed)
-                    //     .service(buy_order_controller::cancel_buy_order)
-                    // )
-                    // .service(
-                    //     web::scope("payment_method")
-                    //     .service(payment_method_controller::create_payment_method)
-                    //     .service(payment_method_controller::delete_payment_method)
-                    //     .service(payment_method_controller::get_my_payment_methods)
-                    // )
-                    // .service(
-                    //     web::scope("order_message")
-                    //     .service(order_message_controller::create_order_message)
-                    //     .service(order_message_controller::get_order_message)
-                    // )
-                    .service(
-                        web::scope("post")
-                            .service(post_controller::create_post)
-                            .service(post_controller::create_comment)
-                            .service(post_controller::get_all_posts)
-                            .service(post_controller::get_my_posts)
-                            .service(post_controller::get_single_posts)
-                            .service(post_controller::like_post)
-                            .service(post_controller::get_users_posts)
-                    )
 
-                    // .service(
-                    //     web::scope("trivia")
-                    //     .service(trivia_game_controller::get_todays_game)  
-                    //     .service(trivia_game_controller::play_game)
-                    // )
-                    .service(
-                        web::scope("profile")
+fn configure_services(cfg: &mut ServiceConfig) {
+    cfg
+        .service(
+            web::scope("api/v1/auth")
+                .service(user_controller::say_hello)
+                .wrap(middlewares::auth_middleware::AuthM)
+                .service(wallet_controller::buy_coin)
+                .service(wallet_controller::get_wallet)
+                .service(
+                    web::scope("post")
+                        .service(post_controller::create_post)
+                        .service(post_controller::create_comment)
+                        .service(post_controller::get_all_posts)
+                        .service(post_controller::get_my_posts)
+                        .service(post_controller::get_single_posts)
+                        .service(post_controller::like_post)
+                        .service(post_controller::get_users_posts),
+                )
+                .service(
+                    web::scope("profile")
                         .service(profile_controller::update_profile)
                         .service(profile_controller::get_profile)
                         .service(profile_controller::get_user_profile)
                         .service(profile_controller::get_friends)
-                        .service(profile_controller::search)
-                        
-                    )
-                    .service(
-                        web::scope("user")
+                        .service(profile_controller::search),
+                )
+                .service(
+                    web::scope("user")
                         .service(user_controller::accept_friend_request)
                         .service(user_controller::reject_friend_request)
                         .service(user_controller::send_friend_request)
                         .service(user_controller::get_my_friend_request)
-                            .service(user_controller::delete_profile)
-                    )
-                    .service(
-                        web::scope("chat")
+                        .service(user_controller::delete_profile),
+                )
+                .service(
+                    web::scope("chat")
                         .service(chats_controller::create_chat)
                         .service(chats_controller::get_by_pair)
                         .service(chats_controller::get_my_chat_pairs)
                         .service(chats_controller::find_chat_pair)
-                        .route("/ws", web::get().to(chats_controller::we_chat_connect)) 
-                    )
-                    // .service(
-                    //     web::scope("circle")
-                    //     .service(chats_controller::create_group_chat)
-                    //     .service(chats_controller::get_circle)
-                    //     .service(chats_controller::get_group_chats)
-                    // )
-                   
-            )
-            // .service(user_controller::create_user)
-            // .service(user_controller::login_user)
-            // .service(user_controller::kura_id_signup)
-            // .service(user_controller::kura_id_login)
-            // .service(user_controller::get_code)
-            .service(index)
-            .service(user_controller::create_account)
-            .service(user_controller::login)
-            .service(system_controller::get_system_data)
-            .service(download_apk)
-            
-
-            //
-
-
-    })
-        .bind(address)?
-        .run()
-        .await
+                        .route("/ws", web::get().to(chats_controller::we_chat_connect)),
+                ),
+        )
+        .service(index)
+        .route("/ws", web::get().to(chat_session_service::ws_chat))
+        .service(user_controller::create_account)
+        .service(user_controller::login)
+        .service(user_controller::confirm_account)
+        .service(user_controller::resend_code)
+        .service(system_controller::get_system_data)
+        .service(download_apk);
 }
+
+
+
+fn load_ssl_config(cert_path: &str, key_path: &str) ->Result<ServerConfig, Box<dyn std::error::Error>> {
+    // Load certificate
+    let cert_file = File::open(cert_path)?;
+    let mut cert_reader = BufReader::new(cert_file);
+    let cert_chain = certs(&mut cert_reader)
+        .map(|certs| certs.into_iter().map(Certificate).collect())
+        .expect("Failed to load certificate chain");
+
+    // Load private key
+    let key_file = File::open(key_path)?;
+    let mut key_reader = BufReader::new(key_file);
+    let mut keys = pkcs8_private_keys(&mut key_reader)
+        .expect("Failed to load private keys");
+
+    if keys.is_empty() {
+        panic!("No private keys found");
+    }
+
+    let key = PrivateKey(keys.remove(0));
+
+    // Configure TLS
+    let config = ServerConfig::builder()
+        .with_safe_defaults()
+        .with_no_client_auth()
+        .with_single_cert(cert_chain, key)
+        .expect("Failed to create ServerConfig");
+
+    Ok(config)
+}
+
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub port: String,
+    pub database_url: String,
+    pub email:String,
+    pub email_password:String
+}
+
+
+pub static CONFIG: Lazy<Config> = Lazy::new(|| {
+    dotenv().ok();
+
+    let port = match env::var("PORT"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("error loading env port {}", err.to_string());
+            "8000".to_string();
+            return panic!()
+        }
+    };
+
+    let database_url = match env::var("DATABASE_URL"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("error loading env port {}", err.to_string());
+            "8000".to_string();
+            panic!()
+        }
+    };
+
+    let email = match env::var("EMAIL"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("error loading env port {}", err.to_string());
+            "8000".to_string();
+            panic!()
+        }
+    };
+    let email_password = match env::var("EMAIL_PASSWORD"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("error loading env port {}", err.to_string());
+            "8000".to_string();
+            panic!()
+        }
+    };
+    Config{
+        port: port,
+        email:email,
+        database_url:database_url,
+        email_password:email_password
+    }
+});

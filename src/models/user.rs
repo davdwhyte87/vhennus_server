@@ -13,6 +13,7 @@ pub struct User {
     pub user_type: String, // 0 user, 1 admin
     pub password_hash: String,
     pub is_deleted: bool,
+    pub email_confirmed: bool,
 }
 
 // #[derive(Debug,  Clone, Copy, AsExpression, FromSqlRow, Default, Serialize, Deserialize)]

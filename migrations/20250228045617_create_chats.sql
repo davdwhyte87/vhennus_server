@@ -9,4 +9,4 @@ CREATE TABLE chats(
     created_at TIMESTAMP DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMP DEFAULT NOW() NOT NULL ,
     pair_id VARCHAR(50)  NOT NULL
-)
+);

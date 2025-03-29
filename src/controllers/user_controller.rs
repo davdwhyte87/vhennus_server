@@ -10,6 +10,7 @@ use mongodb::bson::doc;
 use rand::Rng;
 use regex::Replacer;
 use serde::Deserialize;
+use serde_derive::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 use validator::Validate;
@@ -19,12 +20,13 @@ use crate::models::fried_request::{FriendRequest, FriendRequestStatus};
 use crate::models::helper::EmailData;
 use crate::models::power_up::{PlayerPowerUp, PowerUpType};
 use crate::models::profile::Profile;
-use crate::models::request_models::{CreateKuracoinID, GetCodeReq, LoginReq, SendFriendReq};
+use crate::models::request_models::{ConfirmAccountReq, CreateKuracoinID, GetCodeReq, LoginReq, ResendCodeReq, SendFriendReq};
 use crate::models::response::{CodeResp, GenericResp, LoginResp, PlayerRunInfoRes, Response};
 use crate::models::run_info::RunInfo;
 use crate::models::user::{User};
 use crate::models::wallet::Wallet;
 use crate::req_models::create_user_req::{CreateUserReq};
+use crate::services::email_service::EmailService;
 use crate::services::friend_request_service::{FriendRequestService, FriendRequestWithProfile};
 use crate::services::mongo_service::MongoService;
 
@@ -146,14 +148,27 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
     let user = User{
         user_name:new_user.user_name.to_owned(),
         created_at:get_time_naive(),
-        email:None,
+        email:Some(new_user.email.to_owned()),
         code:None,
         user_type: "USER".to_string(),
         id: Uuid::new_v4().to_string(),
         password_hash: hashed_password,
-        is_deleted:false
+        is_deleted:false,
+        email_confirmed: false
     };
 
+    // let code: String = rand::thread_rng()
+    //     .gen_range(100_000..1_000_000) // Generates a 6-digit number
+    //     .to_string();
+    // match EmailService::send_signup_email(new_user.email.clone(), code ).await{
+    //     Ok(email)=>{},
+    //     Err(err)=>{
+    //         resp_data.message = "Error sending email".to_string();
+    //         resp_data.server_message = Some(err.to_string());
+    //         resp_data.data = None;
+    //         return HttpResponse::InternalServerError().json(resp_data)
+    //     }
+    // };
 
     
     // setup player data if the user is a player
@@ -161,7 +176,8 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
         let user_res = UserService::create_user(&pool,user.clone()).await;
 
         match user_res {
-            Ok(user)=> {
+            Ok(_)=> {
+         
                 resp_data.message = "Ok".to_string();
                 resp_data.server_message = None;
                 resp_data.data = None;
@@ -179,6 +195,10 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
                 .json(resp_data)
             }
         }
+    
+        
+        // send email verification
+    
     }else{
         resp_data.message = "Wrong user type".to_string();
         resp_data.server_message = None;
@@ -186,12 +206,78 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
         return HttpResponse::BadRequest().json(resp_data) 
     }
 }
+#[post("/resend_code")]
+pub async fn resend_code(pool:Data<PgPool>, req:Json<ResendCodeReq>)->HttpResponse {
+    let mut resp_data = GenericResp::<String>{
+        message: "".to_string(),
+        server_message: None,
+        data: None
+    };
+    // validate data
+    match req.validate(){
+        Ok(data)=>{data},
+        Err(err)=>{
+            resp_data.message = "Validation error".to_string();
+            resp_data.server_message = Some(err.to_string());
+            resp_data.data = None;
+            return HttpResponse::BadRequest().json(resp_data)
+        }
+    };
+
+    match UserService::update_code(&pool, req.email.clone()).await{
+        Ok(_)=>{
+            resp_data.message = "Ok".to_string();
+            return HttpResponse::Ok().json(resp_data)
+        }
+        Err(err)=>{
+            log::error!("error confirming user ct {}", err);
+            resp_data.message = err.to_string();
+            return HttpResponse::BadRequest().json(resp_data)
+        },
+    }
+}
+
+#[post("/confirm_account")]
+pub async fn confirm_account(pool:Data<PgPool>, req:Json<ConfirmAccountReq>)->HttpResponse {
+    let mut resp_data = GenericResp::<String>{
+        message: "".to_string(),
+        server_message: None,
+        data: None
+    };
+    // validate data
+    match req.validate(){
+        Ok(data)=>{data},
+        Err(err)=>{
+            resp_data.message = "Validation error".to_string();
+            resp_data.server_message = Some(err.to_string());
+            resp_data.data = None;
+            return HttpResponse::BadRequest().json(resp_data)
+        }
+    };
+    
+    match UserService::confirm_user_email(&pool, req.email.clone(), req.code.clone()).await{
+        Ok(_)=>{
+            resp_data.message = "Ok".to_string();
+            return HttpResponse::Ok().json(resp_data)
+        }
+        Err(err)=>{
+            log::error!("error confirming user ct {}", err);
+            resp_data.message = err.to_string();
+            return HttpResponse::BadRequest().json(resp_data)
+        },
+    }
+}
 
 
 #[post("/login")]
 pub async fn login(pool:Data<PgPool>, req:Json<LoginReq>)->HttpResponse{
-
-    let mut resp_data = GenericResp::<String>{
+    #[derive(Debug, Serialize, Deserialize)]
+    struct LoginResp{
+        pub token:String,
+        pub email_confirmed:bool,
+        pub email:String
+    }
+    let mut resp_data = GenericResp::<LoginResp>{
         message: "".to_string(),
         server_message: None,
         data: None
@@ -276,10 +362,15 @@ pub async fn login(pool:Data<PgPool>, req:Json<LoginReq>)->HttpResponse{
                 json(Response{message:"Error getting token".to_string()})
         }
     };
+    
   
     resp_data.message = "Ok".to_string();
     resp_data.server_message = None;
-    resp_data.data = Some(login_token);
+    resp_data.data = Some(LoginResp{
+        token: login_token,
+        email_confirmed: user.email_confirmed,
+        email: user.email.unwrap_or_default()
+    });
     return HttpResponse::Ok().json(resp_data)
 
 }
@@ -437,6 +528,8 @@ pub async fn check_if_user_exists(pool:&Data<PgPool>, email:&String)->bool {
 
     return ok;
 }
+
+
 
 // check if user exists
 // pub async fn check_if_user_exists_user_name(pool:&Data<DbPool>, user_name:&String)->bool {

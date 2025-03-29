@@ -4,4 +4,4 @@ CREATE TABLE likes(
     post_id VARCHAR(50)  REFERENCES  posts(id) ON DELETE CASCADE NOT NULL ,
     PRIMARY KEY (user_name, post_id)
 
-)
+);
