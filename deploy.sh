@@ -17,14 +17,14 @@ if [ "$APP_ENV" = "test" ]; then
     # Test deployment commands
     PROJECT_DIR="/root/test_vhennus"
     SERVICE_NAME="test.vhennus.service"
-    BRANCH = "develop"
+    BRANCH="develop"
     export DATABASE_URL="postgres://postgres:admin05501@127.0.0.1:5432/vhennus_test"
 elif [ "$APP_ENV" = "prod" ]; then
     echo "Deploying to PRODUCTION environment..."
     # Production deployment commands
      PROJECT_DIR="/root/vhennus"
      SERVICE_NAME="vhennus.service"
-     BRANCH = "main"
+     BRANCH="main"
      export DATABASE_URL="postgres://postgres:admin05501@127.0.0.1:5432/vhennus"
 else
     echo "Unknown environment. Check your .env file."
@@ -40,8 +40,8 @@ EXECUTABLE_NAME="vhennus_server"
 cd "$PROJECT_DIR" || { echo "Failed to change directory to $PROJECT_DIR"; exit 1; }
 
 # Force pull latest changes
-git reset --hard origin/$BRANCH
-if ! git pull origin $BRANCH; then
+git reset --hard origin/"$BRANCH"
+if ! git pull origin "$BRANCH"; then
     echo "Failed to pull latest changes from GitHub"
     exit 1
 fi
