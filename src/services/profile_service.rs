@@ -131,4 +131,17 @@ impl ProfileService {
 
         Ok(exists.unwrap_or(false))
     }
+    
+    
+    pub async fn friend_suggestion(pool:&PgPool) ->Result<Vec<MiniProfile>, Box<dyn Error>> {
+        let suggestions = sqlx::query_as!(MiniProfile, "
+            SELECT user_name, name, bio, image 
+            FROM profiles 
+            WHERE name IS NOT NULL AND bio IS NOT NULL 
+            ORDER BY RANDOM() 
+            LIMIT 10;
+        ").fetch_all(pool).await?;
+        
+        Ok(suggestions)
+    }
 }

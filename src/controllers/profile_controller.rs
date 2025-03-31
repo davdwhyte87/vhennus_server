@@ -327,3 +327,31 @@ pub async fn update_profile(
 //     return HttpResponse::Ok().json(respData)
 // 
 // }
+
+#[get("/friend_suggestion")]
+pub async fn get_friend_suggestion(
+    pool:Data<PgPool>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+    let mut respData = GenericResp::<Vec<MiniProfile>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+    
+    let suggestions = match ProfileService::friend_suggestion(&pool).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("Error getting friend suggestion... {}", err);
+            respData.message = "Error getting friend suggestion".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
+
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
+    respData.data = Some(suggestions);
+    return HttpResponse::Ok().json(respData);
+}
