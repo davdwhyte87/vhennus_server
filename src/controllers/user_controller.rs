@@ -915,6 +915,14 @@ pub async fn send_friend_request(
         created_at:get_time_naive(),
         updated_at:get_time_naive(),
     };
+    
+    // make sure user does not send fr to himself
+    if friend_request.user_name == claim.user_name.clone(){
+        respData.message = "Cannot send friend request to self".to_string();
+        respData.server_message = None;
+        respData.data = None;
+        return HttpResponse::BadRequest().json(respData); 
+    }
 
     match FriendRequestService::create_friend_request(&pool, friend_request.clone()).await{
         Ok(data)=>{data}, 
@@ -1020,7 +1028,7 @@ pub async fn reject_friend_request(
         }
     };
     
-    match FriendRequestService::reject_friend_request(&pool, path.id.clone(), claim.user_name.clone()).await{
+    match FriendRequestService::reject_friend_request2(&pool, path.id.clone(), claim.user_name.clone()).await{
         Ok(data)=>{data}, 
         Err(err)=>{
             log::error!("error rejecting FR {}", err);
