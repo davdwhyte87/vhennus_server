@@ -9,6 +9,8 @@ use r2d2_mongodb::mongodb::coll;
 use serde_derive::{Deserialize, Serialize};
 use sqlx::PgPool;
 use crate::models::profile::Profile;
+use crate::models::user::User;
+
 pub const PROFILE_COLLECTION:&str = "Profile";
 
 pub struct  ProfileService{
@@ -144,4 +146,17 @@ impl ProfileService {
         
         Ok(suggestions)
     }
+    pub async fn get_all(pool:&PgPool)->Result<Vec<Profile>, Box<dyn Error>>{
+        let profiles =match  sqlx::query_as!(Profile, 
+        "SELECT * FROM profiles")
+            .fetch_all(pool)
+            .await{
+            Ok(opt) => opt,
+            Err(err) => {
+                return Err(Box::new(err));
+            }
+        };
+        return Ok(profiles);
+    }
 }
+

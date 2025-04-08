@@ -34,6 +34,7 @@ use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
 use crate::models::user::User;
+use crate::services::daily_post_job_service::{daily_post_cron_task, start_jobs};
 use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
@@ -104,6 +105,7 @@ async fn init_db_pool_x()-> PgPool{
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
+    
     log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
     info!("Starting server..");
 
@@ -151,7 +153,8 @@ async fn main() -> std::io::Result<()> {
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
 
-  
+    // start daily post job
+    start_jobs(pool.clone()).await;
     
     if (app_env == "test" || app_env=="prod"){
         let ssl_config = load_ssl_config(
