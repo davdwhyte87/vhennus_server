@@ -20,6 +20,13 @@ pub struct UpdateProfileReq{
     pub app_f_token:Option<String>
 }
 
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct AddWallet{
+    pub address:String,
+    pub message:String,
+    pub signature:String,
+}
+
 
 
 #[derive(Debug, Serialize, Deserialize, Validate)]

@@ -26,3 +26,4 @@ pub mod chat_pair_service;
 pub mod chat_session_service;
 pub mod app_notify;
 pub mod email_service;
+pub mod daily_post_job_service;

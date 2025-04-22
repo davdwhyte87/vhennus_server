@@ -133,6 +133,8 @@ impl UserService{
         return Ok(user);
     }
 
+
+
     pub async fn get_by_email(pool:&PgPool, email:String)->Result<Option<User>, Box<dyn Error>>{
         let user =match  sqlx::query_as!(User, 
         "SELECT * FROM users WHERE email = $1 ", email.clone() )

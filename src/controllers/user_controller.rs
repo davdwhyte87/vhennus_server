@@ -26,6 +26,7 @@ use crate::models::run_info::RunInfo;
 use crate::models::user::{User};
 use crate::models::wallet::Wallet;
 use crate::req_models::create_user_req::{CreateUserReq};
+use crate::services::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
 use crate::services::email_service::EmailService;
 use crate::services::friend_request_service::{FriendRequestService, FriendRequestWithProfile};
 use crate::services::mongo_service::MongoService;
@@ -915,6 +916,14 @@ pub async fn send_friend_request(
         created_at:get_time_naive(),
         updated_at:get_time_naive(),
     };
+    
+    // make sure user does not send fr to himself
+    if friend_request.user_name == claim.user_name.clone(){
+        respData.message = "Cannot send friend request to self".to_string();
+        respData.server_message = None;
+        respData.data = None;
+        return HttpResponse::BadRequest().json(respData); 
+    }
 
     match FriendRequestService::create_friend_request(&pool, friend_request.clone()).await{
         Ok(data)=>{data}, 
@@ -939,6 +948,32 @@ pub async fn send_friend_request(
             return HttpResponse::InternalServerError().json(respData); 
         }
     };
+
+    // get user profile
+    let profile = match ProfileService::get_profile(&pool, req.user_name.clone()).await{
+        Ok(profile)=>{profile},
+        Err(err)=>{
+            log::error!("error getting profile {}", err.to_string());
+            Profile::default()
+        }
+    };
+
+    if !profile.user_name.is_empty() && profile.app_f_token.is_some(){
+        // send notification
+        let payload = FcmMessage{
+            message: MessagePayload {
+                token: profile.app_f_token.unwrap_or_default() ,
+                notification: Notification {
+                    title: "New Friend Request".to_string(),
+                    body: "@".to_owned() + &*friend_request.requester.clone()+ &*" just sent you a friend request. Go to your profile to view it!".to_string()
+                },
+                data: None,
+            },
+        };
+        actix_web::rt::spawn(async move {
+            send_app_notification(payload).await;  
+        });
+    }
 
     respData.message = "Ok".to_string();
     respData.server_message = None;
@@ -976,7 +1011,7 @@ pub async fn accept_friend_request(
 
   
  
-    match FriendRequestService::accept_friend_request(&pool, path.id.clone(), claim.user_name.clone() ).await{
+    let fr = match FriendRequestService::accept_friend_request(&pool, path.id.clone(), claim.user_name.clone() ).await{
         Ok(data)=>{data}, 
         Err(err)=>{
             log::error!("error accepting request {}", err);
@@ -987,6 +1022,33 @@ pub async fn accept_friend_request(
             return HttpResponse::InternalServerError().json(respData);
         }
     };
+    
+   
+    // get user profile
+    let profile = match ProfileService::get_profile(&pool, fr.requester).await{
+        Ok(profile)=>{profile},
+        Err(err)=>{
+            log::error!("error getting profile {}", err.to_string());
+            Profile::default()
+        }
+    };
+
+    if !profile.user_name.is_empty() && profile.app_f_token.is_some(){
+        // send notification
+        let payload = FcmMessage{
+            message: MessagePayload {
+                token: profile.app_f_token.unwrap_or_default() ,
+                notification: Notification {
+                    title: "New Friend Request".to_string(),
+                    body: "@".to_owned() + &*fr.user_name.clone()+ &*" Has accepted your friend request!".to_string()
+                },
+                data: None,
+            },
+        };
+        actix_web::rt::spawn(async move {
+            send_app_notification(payload).await;
+        });
+    }
 
     respData.message = "Ok".to_string();
     respData.server_message =None;
@@ -1020,7 +1082,7 @@ pub async fn reject_friend_request(
         }
     };
     
-    match FriendRequestService::reject_friend_request(&pool, path.id.clone(), claim.user_name.clone()).await{
+    match FriendRequestService::reject_friend_request2(&pool, path.id.clone(), claim.user_name.clone()).await{
         Ok(data)=>{data}, 
         Err(err)=>{
             log::error!("error rejecting FR {}", err);

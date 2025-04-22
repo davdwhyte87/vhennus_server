@@ -9,6 +9,8 @@ use r2d2_mongodb::mongodb::coll;
 use serde_derive::{Deserialize, Serialize};
 use sqlx::PgPool;
 use crate::models::profile::Profile;
+use crate::models::user::User;
+
 pub const PROFILE_COLLECTION:&str = "Profile";
 
 pub struct  ProfileService{
@@ -77,14 +79,16 @@ impl ProfileService {
              name = COALESCE($2, name),
              bio = COALESCE($3, bio),
              image = COALESCE($4, image),
-             app_f_token = COALESCE($5, app_f_token)
+             app_f_token = COALESCE($5, app_f_token),
+             wallets = COALESCE($6, wallets)
          WHERE user_name = $1
          RETURNING user_name, name, bio, image",
             profile.user_name,
             profile.name,
             profile.bio,
             profile.image,
-            profile.app_f_token
+            profile.app_f_token,
+            profile.wallets
         )
             .fetch_one(pool)
             .await?;
@@ -131,4 +135,30 @@ impl ProfileService {
 
         Ok(exists.unwrap_or(false))
     }
+    
+    
+    pub async fn friend_suggestion(pool:&PgPool) ->Result<Vec<MiniProfile>, Box<dyn Error>> {
+        let suggestions = sqlx::query_as!(MiniProfile, "
+            SELECT user_name, name, bio, image 
+            FROM profiles 
+            WHERE name IS NOT NULL AND bio IS NOT NULL 
+            ORDER BY RANDOM() 
+            LIMIT 10;
+        ").fetch_all(pool).await?;
+        
+        Ok(suggestions)
+    }
+    pub async fn get_all(pool:&PgPool)->Result<Vec<Profile>, Box<dyn Error>>{
+        let profiles =match  sqlx::query_as!(Profile, 
+        "SELECT * FROM profiles")
+            .fetch_all(pool)
+            .await{
+            Ok(opt) => opt,
+            Err(err) => {
+                return Err(Box::new(err));
+            }
+        };
+        return Ok(profiles);
+    }
 }
+

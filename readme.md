@@ -1,49 +1,42 @@
-# Amorgens server
+# 🚀 Vhennus server
+
+**Vhennus** is a Rust-based backend application designed for fast, secure, and scalable communication between users on the vhennus social media app. It supports real-time chatting, profile updates, image upload and downloads, voice calling etc.
+
+---
+
+## 📦 Features
+
+- Real-time chatting (socet.io)
+- Media posting, liking and commenting
+- Postgresql database/migration
+- Group chatting
+- Group voice calling
+- Profile setup, image upload
+- Https protocol, Json based requests and responses
+
+---
+
+## ⚙️ Running the Server
+
+> Requires **Rust** (2021 edition or newer)
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/davdwhyte87/vhennus_server.git
+cd vhennus_server
+```
+### 2. Run the server
+```bash
+cargo build --release
+
+cargo run --release
+```
+
+### Postman
 
 
-## V1.1
-Users can: 
-- Create VC ID
-- Login 
-- Update profile 
-- Create post 
-- Like posts
-- Comment and view comments
-- Create friend request 
-- Accept friend request 
-- View friend list 
-- Chat with friend
-- View chats 
-- Create group chat 
-
-
-
-## Features
-
-Users can 
-- Authenticate 
-- Create account 
-- login and get token
-
-
-Buyers can: 
-- Create buy order
-- Confirm buy order 
-- View buy order
-- report buy order
-- cancel buy order
-
-
-Seller can: 
-- create sell order
-- view sell order
-- view buy orders under sell order
-- confirm sell order
-- cancel sell order 
-
-when the first person requests for a new game, the server gets todays question and creates the game Subsequest users will get todays game. and answer. 
-deissel notes: use this when working with rust rover` diesel print-schema | Out-File -Encoding utf8 src\schema.rs
-`
-
-- test server runs on 8000
-- live server runs on 7000
+## 🤝 Contributing
+Feel free to raise a PR, go through the list of issues and start a discussion if you need any help
+## 🔐 License
+MIT License © 2025 Vhennus team
