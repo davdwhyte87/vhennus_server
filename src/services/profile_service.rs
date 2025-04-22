@@ -79,14 +79,16 @@ impl ProfileService {
              name = COALESCE($2, name),
              bio = COALESCE($3, bio),
              image = COALESCE($4, image),
-             app_f_token = COALESCE($5, app_f_token)
+             app_f_token = COALESCE($5, app_f_token),
+             wallets = COALESCE($6, wallets)
          WHERE user_name = $1
          RETURNING user_name, name, bio, image",
             profile.user_name,
             profile.name,
             profile.bio,
             profile.image,
-            profile.app_f_token
+            profile.app_f_token,
+            profile.wallets
         )
             .fetch_one(pool)
             .await?;

@@ -216,6 +216,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(profile_controller::get_friends)
                         .service(profile_controller::search)
                         .service(profile_controller::get_friend_suggestion)
+                        .service(profile_controller::add_wallet)
                 )
                 .service(
                     web::scope("user")
