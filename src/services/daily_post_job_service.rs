@@ -42,7 +42,7 @@ pub async fn daily_post_cron_task() {
     }
 }
 
-pub async fn jbb(pool:PgPool)->Result<(), Box<dyn std::error::Error>>{
+pub async fn morning_notify(pool:PgPool)->Result<(), Box<dyn std::error::Error>>{
     let cron_expression = "15 11 * * * *"; // Cron expression for 11:10 AM
     let schedule = match Schedule::from_str(cron_expression) {
         Ok(s) => s,
@@ -92,9 +92,9 @@ pub async fn jbb(pool:PgPool)->Result<(), Box<dyn std::error::Error>>{
                 description: String,
             }
             let messages:Vec<Msg> = vec![
-                Msg{title: String::from("Everyone is a creator"),description:String::from("Make 500 naira everytime you post!")},
-                Msg{title: String::from("Earn over 5,000 naira daily"),description:String::from("Make 500 naira everytime you post!")},
-                Msg{title: String::from("Lets stack those coins"),description:String::from("Make 500 naira everytime you post!")}
+                Msg{title: String::from("Everyone is a creator"),description:String::from("Make 500 VEC everytime you post!")},
+                Msg{title: String::from("Earn over 5,000 naira daily"),description:String::from("Make 10 VEC every minute you spend on the app!")},
+                Msg{title: String::from("Lets stack those coins"),description:String::from("Make 500 VEC everytime you post!")}
             ];
             let mut rng = thread_rng();
             let message =match messages.choose(&mut rng) {
@@ -237,7 +237,7 @@ pub async fn start_jobs(db_pool: PgPool){
     //let pool = db_pool.clone();
     //actix_rt::spawn(daily_post_cron_task());
     actix_rt::spawn(onehr_comment_cron_taskx(db_pool.clone()));
-    //actix_rt::spawn(jbb());
+    actix_rt::spawn(morning_notify(db_pool.clone()));
     log::info!("✅ Cron job has been spawned.");
 }
 

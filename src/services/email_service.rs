@@ -52,4 +52,46 @@ impl EmailService {
             }
         }
     }
+
+    pub async  fn send_reset_password_email(reciever_email:String, code:String)->Result<(), Box<dyn Error>>{
+        let mailer:AsyncSmtpTransport<Tokio1Executor> = AsyncSmtpTransport::<Tokio1Executor>::relay("smtp.zoho.com")
+            .unwrap()
+            .credentials(Credentials::new(CONFIG.email.clone(), CONFIG.email_password.clone()))
+            .build();
+        let template_path = "templates/reset_password_email.hbs";
+        let template_content = fs::read_to_string(template_path)
+            .expect("Failed to read email template file");
+        #[derive(Serialize)]
+        struct EmailContext {
+            code: String,
+        }
+        let context = EmailContext {
+            code: code.clone(),
+        };
+
+        let mut handlebars = Handlebars::new();
+        handlebars
+            .register_template_string("email_template", &template_content)
+            .expect("Failed to register template");
+        let rendered_body = handlebars
+            .render("email_template", &context)
+            .expect("Failed to render template");
+
+        let email = Message::builder()
+            .from("hello@vhennus.com".parse().unwrap())
+            .to(reciever_email.parse()?)
+            .subject("Reset Password Email")
+            .header(ContentType::TEXT_HTML)
+            .body(rendered_body)
+            .unwrap();
+
+        match mailer.send(email).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                log::error!("Failed to send email: {}", e);
+                Err(Box::new(e))
+            }
+        }
+    }
+
 }
