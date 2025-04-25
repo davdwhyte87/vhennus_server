@@ -193,6 +193,18 @@ impl UserService{
         };
         Ok(())
     }
+
+    pub async fn update(pool:&PgPool, user:User)->Result<(), Box<dyn Error>>{
+        let res = sqlx::query_as!(User,
+        "UPDATE users SET 
+                 code=COALESCE($2,code),
+                 password_hash = COALESCE($3, password_hash)
+        WHERE user_name = $1
+        ",user.user_name.clone(), user.code.clone(), user.password_hash.clone() )
+            
+            .execute(pool).await?;
+        Ok(())
+    }
     
     
     pub async fn delete_user(pool:&PgPool, username:String)->Result<(), Box<dyn Error>>{

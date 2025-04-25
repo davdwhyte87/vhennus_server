@@ -21,6 +21,18 @@ pub struct UpdateProfileReq{
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct ChangePasswordReq{
+    pub code:String,
+    pub password:String,
+    pub user_name:String
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct GetPasswordResetCodeReq{
+    pub user_name:String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct AddWallet{
     pub address:String,
     pub message:String,

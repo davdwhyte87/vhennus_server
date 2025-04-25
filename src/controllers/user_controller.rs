@@ -26,12 +26,13 @@ use crate::models::run_info::RunInfo;
 use crate::models::user::{User};
 use crate::models::wallet::Wallet;
 use crate::req_models::create_user_req::{CreateUserReq};
+use crate::req_models::requests::{ChangePasswordReq, GetPasswordResetCodeReq, UpdateProfileReq};
 use crate::services::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
 use crate::services::email_service::EmailService;
 use crate::services::friend_request_service::{FriendRequestService, FriendRequestWithProfile};
 use crate::services::mongo_service::MongoService;
 
-use crate::services::profile_service::ProfileService;
+use crate::services::profile_service::{MiniProfile, ProfileService};
 use crate::services::tcp::{self, send_to_tcp_server};
 use crate::services::user_service::UserService;
 use crate::services::wallet_service::WalletService;
@@ -238,6 +239,79 @@ pub async fn resend_code(pool:Data<PgPool>, req:Json<ResendCodeReq>)->HttpRespon
     }
 }
 
+#[post("/get_reset_password_code")]
+pub async fn get_reset_password_code(
+    pool:Data<PgPool>,
+    req: Result<web::Json<GetPasswordResetCodeReq>, actix_web::Error>,
+)->HttpResponse {
+    let mut respData = GenericResp::<String>{
+        message: "".to_string(),
+        server_message: None,
+        data: None
+    };
+    // validate data
+    let req= match req{
+        Ok(data)=>{data},
+        Err(err)=>{
+            respData.message = "Validation error".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData)
+        }
+    };
+
+    // get user account
+    let user =match UserService::get_by_username(&pool,req.user_name.clone() ).await{
+        Ok(data)=>{match data{
+            Some(user)=>{user},
+            None=>{
+                respData.message = "User account not found".to_string();
+                respData.server_message = None;
+                respData.data = None;
+                return HttpResponse::BadRequest().json(respData)
+            }
+        }},
+        Err(err)=>{
+            log::error!("error getting user {}", err);
+            respData.message = "Error getting user".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+    // derive code
+    let code = rand::thread_rng()
+        .gen_range(100_000..1_000_000) ;
+    //update user
+    let mut new_user = user.clone();
+    new_user.code = Some(code);
+    match UserService::update(&pool, new_user.clone()).await{
+        Ok(_)=>{}
+        Err(err)=>{
+            log::error!("error updating user {}", err);
+            respData.message = "Error updating user".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+    // send email
+    match EmailService::send_reset_password_email(user.email.unwrap_or_default(),code.to_string() ).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            log::error!("error sending reset password email {}", err);
+            respData.message = "Error sending email".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
+    respData.data = None;
+    return HttpResponse::Ok().json(respData);
+}
+
 #[post("/confirm_account")]
 pub async fn confirm_account(pool:Data<PgPool>, req:Json<ConfirmAccountReq>)->HttpResponse {
     let mut resp_data = GenericResp::<String>{
@@ -267,6 +341,85 @@ pub async fn confirm_account(pool:Data<PgPool>, req:Json<ConfirmAccountReq>)->Ht
             return HttpResponse::BadRequest().json(resp_data)
         },
     }
+}
+
+
+#[post("/change_password")]
+pub async fn change_password(
+    pool:Data<PgPool>,
+    req: Result<web::Json<ChangePasswordReq>, actix_web::Error>,
+)->HttpResponse {
+    let mut respData = GenericResp::<String> {
+        message: "".to_string(),
+        server_message: None,
+        data: None
+    };
+
+    let req = match req {
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("validation  error  {}", err.to_string());
+            respData.message = "Validation error".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json( respData);
+        }
+    };
+
+    // get user account
+    let user =match UserService::get_by_username(&pool, req.user_name.clone()).await{
+        Ok(data)=>{match data{
+            Some(user)=>{user},
+            None=>{
+                respData.message = "User account not found".to_string();
+                respData.server_message = None;
+                respData.data = None;
+                return HttpResponse::BadRequest().json(respData)
+            }
+        }},
+        Err(err)=>{
+            log::error!("error getting user {}", err);
+            respData.message = "Error getting user".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+    // check code
+    if req.code != user.code.unwrap_or_default().to_string(){
+        respData.message = "Invalid code".to_string();
+        respData.server_message = None;
+        respData.data = None;
+        return HttpResponse::BadRequest().json(respData)
+    }
+    // update password
+    let hashed_password = match hash(req.password.clone(), DEFAULT_COST){
+        Ok(hashed)=>{hashed},
+        Err(err)=>{
+            log::error!("error encrypting password");
+            respData.message = "Password error".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData)
+        }
+    };
+    let mut new_user = user.clone();
+    new_user.password_hash = hashed_password;
+    match UserService::update(&pool, new_user).await{
+        Ok(_)=>{}
+        Err(err)=>{
+            log::error!("error updating user {}", err);
+            respData.message = "Error updating user".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
+    respData.data = None;
+    return HttpResponse::Ok().json(respData)
 }
 
 

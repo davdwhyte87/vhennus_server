@@ -224,7 +224,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(user_controller::reject_friend_request)
                         .service(user_controller::send_friend_request)
                         .service(user_controller::get_my_friend_request)
-                        .service(user_controller::delete_profile),
+                        .service(user_controller::delete_profile)
                 )
                 .service(
                     web::scope("chat")
@@ -242,7 +242,9 @@ fn configure_services(cfg: &mut ServiceConfig) {
         .service(user_controller::confirm_account)
         .service(user_controller::resend_code)
         .service(system_controller::get_system_data)
-        .service(download_apk);
+        .service(download_apk)
+        .service(user_controller::get_reset_password_code)
+        .service(user_controller::change_password);
 }
 
 
