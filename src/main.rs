@@ -34,7 +34,7 @@ use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
 use crate::models::user::User;
-use crate::services::daily_post_job_service::{daily_post_cron_task, start_jobs};
+use crate::services::daily_post_job_service::{daily_post_cron_task, get_exchange_rate_job, start_jobs};
 use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
@@ -105,7 +105,7 @@ async fn init_db_pool_x()-> PgPool{
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
-    
+  
     log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
     info!("Starting server..");
 
@@ -152,7 +152,7 @@ async fn main() -> std::io::Result<()> {
     let user_connections: UserConnections = Arc::new(DashMap::new());
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
-
+    
     // start daily post job
     start_jobs(pool.clone()).await;
     
@@ -284,7 +284,8 @@ pub struct Config {
     pub port: String,
     pub database_url: String,
     pub email:String,
-    pub email_password:String
+    pub email_password:String,
+    pub exchange_rate_api_key:String,
 }
 
 
@@ -333,10 +334,21 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             panic!()
         }
     };
+    let exchange_rate_api_key = match env::var("EXCHANGE_API_KEY"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("error loading env port {}", err.to_string());
+            "".to_string();
+            panic!()
+        }
+    };
     Config{
         port: port,
         email:email,
         database_url:database_url,
-        email_password:email_password
+        email_password:email_password,
+        exchange_rate_api_key: exchange_rate_api_key,
     }
 });
