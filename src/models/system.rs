@@ -16,5 +16,5 @@ pub struct System {
     pub android_app_version:String,
     pub trivia_win_amount:BigDecimal,
     pub apk_link:String,
-    pub ngn:Option<String>,
+    pub ngn:BigDecimal,
 }

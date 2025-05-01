@@ -18,6 +18,7 @@ use rand::seq::SliceRandom;
 use rand::prelude::*;
 use crate::services::post_service::PostService;
 use awc::Client;
+use bigdecimal::{BigDecimal, FromPrimitive};
 use crate::CONFIG;
 use crate::models::live_rate_resp::LiveRateResponse;
 use crate::services::system_service::SystemService;
@@ -92,7 +93,9 @@ pub async fn get_exchange_rate_job(pool:PgPool){
                 }
             };
             system_data.ngn = match body.quotes.get("USDNGN"){
-                Some(ngn) => Some(ngn.to_string()),
+                Some(ngn) => { 
+                    BigDecimal::from_f64(*ngn).unwrap_or_default()
+                },
                 None=>{
                     continue;
                 }
