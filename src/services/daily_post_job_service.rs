@@ -17,7 +17,99 @@ use crate::services::user_service::UserService;
 use rand::seq::SliceRandom;
 use rand::prelude::*;
 use crate::services::post_service::PostService;
+use awc::Client;
+use crate::CONFIG;
+use crate::models::live_rate_resp::LiveRateResponse;
+use crate::services::system_service::SystemService;
 
+pub async fn get_exchange_rate_job(pool:PgPool){
+    let cron_expression = "0 10 11 * * *";
+    let schedule = match Schedule::from_str(cron_expression) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error parsing cron expression: {}", e);
+            return;
+        }
+    };
+
+    loop {
+        let now: DateTime<Utc> = Utc::now();
+        let next_occurrence: DateTime<Utc> = match schedule.upcoming(Utc).next() {
+            Some(n) => n,
+            None => {
+                eprintln!("Error: Could not retrieve next scheduled time.");
+                continue;
+            }
+        };
+
+        use chrono::{DateTime, Duration, Utc};
+        if next_occurrence > now {
+            let sleep_duration: Duration = next_occurrence - now;
+            let sleep_std_duration = match sleep_duration.to_std() {
+                Ok(d) => d,
+                Err(e) => {
+                    log::error!("Error converting duration: {}", e);
+                    continue;
+                }
+            };
+
+            println!("Sleeping until next scheduled run at: {}", next_occurrence);
+            thread::sleep(sleep_std_duration);
+            println!("Running scheduled task at: {}", Utc::now());
+
+            let url = format!(
+                "https://api.exchangerate.host/live?access_key={}",
+                CONFIG.exchange_rate_api_key
+            );
+            println!("{}", url);
+            let resp = match reqwest::get(&url).await{
+                Ok(resp) => resp,
+                Err(err) => {
+                    log::error!("{}", err);
+                    continue;
+                }
+            };
+            let body = match resp.json::<LiveRateResponse>().await{
+                Ok(body) => body,
+                Err(e)=>{
+                    log::error!("{}",e);
+                    continue
+                }
+            };
+            // save to database 
+            let mut system_data = match SystemService::get_system_data(&pool).await{
+                Ok(system_data) => {
+                    match system_data{
+                        Some(system_data) => system_data,
+                        None=>{
+                            continue;
+                        }
+                    }
+                },
+                Err(err)=>{
+                    log::error!("{}", err);
+                    continue;
+                }
+            };
+            system_data.ngn = match body.quotes.get("USDNGN"){
+                Some(ngn) => Some(ngn.to_string()),
+                None=>{
+                    continue;
+                }
+            };
+            match SystemService::update_system_data(&pool, system_data).await{
+                Ok(s)=>{},
+                Err(err)=>{
+                    log::error!("{}", err);
+                    continue;
+                }
+            };
+            println!("power {:?}", body);
+        }
+    }
+    
+  
+}
 pub async fn daily_post_cron_task() {
     let expression = "0 0 8,20 * * 1,3"; // Runs at the start of every hour
 
@@ -43,7 +135,8 @@ pub async fn daily_post_cron_task() {
 }
 
 pub async fn morning_notify(pool:PgPool)->Result<(), Box<dyn std::error::Error>>{
-    let cron_expression = "15 11 * * * *"; // Cron expression for 11:10 AM
+    // let cron_expression = "15 11 * * * *";
+    let cron_expression = "0 10 11 * * *";
     let schedule = match Schedule::from_str(cron_expression) {
         Ok(s) => s,
         Err(e) => {
@@ -238,6 +331,8 @@ pub async fn start_jobs(db_pool: PgPool){
     //actix_rt::spawn(daily_post_cron_task());
     actix_rt::spawn(onehr_comment_cron_taskx(db_pool.clone()));
     actix_rt::spawn(morning_notify(db_pool.clone()));
+    actix_rt::spawn(get_exchange_rate_job(db_pool.clone()));
+
     log::info!("✅ Cron job has been spawned.");
 }
 

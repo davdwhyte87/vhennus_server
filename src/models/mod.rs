@@ -27,3 +27,4 @@ pub mod chat;
 pub mod circle;
 pub mod chat_pair;
 pub mod likes;
+pub mod live_rate_resp;
