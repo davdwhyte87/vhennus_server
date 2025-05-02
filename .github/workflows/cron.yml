@@ -1,0 +1,42 @@
+name: Daily Morning Notify
+
+on:
+  schedule:
+    - cron: '40 11 * * *'   # runs every day at 01:40 WAT (00:40 UTC)
+
+jobs:
+  morning_notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger morning_notify
+        env:
+          API_URL: https://bend.vhennus.com:8000/cron_jobs/morning_notify
+        run: |
+          echo "📅 $(date -u): calling $API_URL"
+          curl -X GET "$API_URL" \
+            -H "Content-Type: application/json" \
+            --fail --show-error
+  comment_notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comments Notify
+        env:
+          API_URL: https://bend.vhennus.com:8000/cron_jobs/comments_notify
+        run: |
+          echo "📅 $(date -u): calling $API_URL"
+          curl -X GET "$API_URL" \
+            -H "Content-Type: application/json" \
+            --fail --show-error
+
+  get_exchange_rates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get excahnge rates
+        env:
+          API_URL: https://bend.vhennus.com:8000/cron_jobs/get_exchange_rate
+        run: |
+          echo "📅 $(date -u): calling $API_URL"
+          curl -X GET "$API_URL" \
+            -H "Content-Type: application/json" \
+            --fail --show-error
+

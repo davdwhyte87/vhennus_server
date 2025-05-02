@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use actix_rt::time::sleep;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use cron::Schedule;
 use log::log;
 
@@ -24,7 +24,7 @@ use crate::models::live_rate_resp::LiveRateResponse;
 use crate::services::system_service::SystemService;
 
 pub async fn get_exchange_rate_job(pool:PgPool){
-    let cron_expression = "0 10 11 * * *";
+    let cron_expression = "0 10 22 * * *"; // 8:35 PM
     let schedule = match Schedule::from_str(cron_expression) {
         Ok(s) => s,
         Err(e) => {
@@ -34,8 +34,8 @@ pub async fn get_exchange_rate_job(pool:PgPool){
     };
 
     loop {
-        let now: DateTime<Utc> = Utc::now();
-        let next_occurrence: DateTime<Utc> = match schedule.upcoming(Utc).next() {
+        let now = Local::now();
+        let next_occurrence = match schedule.upcoming(Local).next() {
             Some(n) => n,
             None => {
                 eprintln!("Error: Could not retrieve next scheduled time.");
@@ -43,21 +43,19 @@ pub async fn get_exchange_rate_job(pool:PgPool){
             }
         };
 
-        use chrono::{DateTime, Duration, Utc};
         if next_occurrence > now {
-            let sleep_duration: Duration = next_occurrence - now;
-            let sleep_std_duration = match sleep_duration.to_std() {
-                Ok(d) => d,
+            let sleep_duration = next_occurrence - now;
+            match sleep_duration.to_std() {
+                Ok(d) => {
+                    println!("Sleeping until next scheduled run at: {}", next_occurrence);
+                    tokio::time::sleep(d).await;
+                    println!("Running scheduled task at: {}", Utc::now());
+                }
                 Err(e) => {
-                    log::error!("Error converting duration: {}", e);
+                    eprintln!("Error converting duration: {}", e);
                     continue;
                 }
-            };
-
-            println!("Sleeping until next scheduled run at: {}", next_occurrence);
-            thread::sleep(sleep_std_duration);
-            println!("Running scheduled task at: {}", Utc::now());
-
+            }
             let url = format!(
                 "https://api.exchangerate.host/live?access_key={}",
                 CONFIG.exchange_rate_api_key
@@ -93,7 +91,7 @@ pub async fn get_exchange_rate_job(pool:PgPool){
                 }
             };
             system_data.ngn = match body.quotes.get("USDNGN"){
-                Some(ngn) => { 
+                Some(ngn) => {
                     BigDecimal::from_f64(*ngn).unwrap_or_default()
                 },
                 None=>{
@@ -110,119 +108,89 @@ pub async fn get_exchange_rate_job(pool:PgPool){
             println!("power {:?}", body);
         }
     }
-    
-  
-}
-pub async fn daily_post_cron_task() {
-    let expression = "0 0 8,20 * * 1,3"; // Runs at the start of every hour
-
-    let schedule = Schedule::from_str(expression).unwrap();
-
-    loop {
-        let now = Utc::now();
-        if let Some(next) = schedule.upcoming(Utc).next() {
-            let duration = (next - now).to_std().unwrap_or(Duration::from_secs(0));
-            sleep(duration).await;
-            log::info!("Running cron job at {:?}", Utc::now());
-
-            // Perform the task here (e.g., database cleanup, API request, etc.)
-            // get all users and get
-            // send message "checj out wha t your friends are posting"
-
-            let messages = vec!["Hey there! Checkout what your friends are talking about.",
-                                "There's so much happening on vhennus right now, check it out",
-                                "You need to connect... Try meeting like minded people on vhennus"
-            ];
-        }
-    }
 }
 
-pub async fn morning_notify(pool:PgPool)->Result<(), Box<dyn std::error::Error>>{
-    // let cron_expression = "15 11 * * * *";
-    let cron_expression = "0 10 11 * * *";
+
+pub async fn morning_notify(pool: PgPool) {
+    let cron_expression = "0 10 22 * * *"; // 8:35 PM
     let schedule = match Schedule::from_str(cron_expression) {
         Ok(s) => s,
         Err(e) => {
             eprintln!("Error parsing cron expression: {}", e);
-            return Err(Box::new(e));
+            return;
         }
     };
 
     loop {
-        let now: DateTime<Utc> = Utc::now();
-        let next_occurrence: DateTime<Utc> = match schedule.upcoming(Utc).next() {
+        let now = Local::now();
+        let next_occurrence = match schedule.upcoming(Local).next() {
             Some(n) => n,
             None => {
                 eprintln!("Error: Could not retrieve next scheduled time.");
                 continue;
             }
         };
-        
-        use chrono::{DateTime, Duration, Utc};
+
         if next_occurrence > now {
-            let sleep_duration: Duration = next_occurrence - now;
-            let sleep_std_duration = match sleep_duration.to_std() {
-                Ok(d) => d,
+            let sleep_duration = next_occurrence - now;
+            match sleep_duration.to_std() {
+                Ok(d) => {
+                    println!("Sleeping until next scheduled run at: {}", next_occurrence);
+                    tokio::time::sleep(d).await;
+                    println!("Running scheduled task at: {}", Utc::now());
+                }
                 Err(e) => {
                     eprintln!("Error converting duration: {}", e);
                     continue;
                 }
-            };
+            }
 
-            println!("Sleeping until next scheduled run at: {}", next_occurrence);
-            thread::sleep(sleep_std_duration);
-            println!("Running scheduled task at: {}", Utc::now());
-
-            let profiles =match  ProfileService::get_all(&pool).await{
+            // Proceed with your task...
+            let profiles = match ProfileService::get_all(&pool).await {
                 Ok(p) => p,
-                Err(err)=>{
+                Err(err) => {
                     log::error!("error getting all users  {}", err.to_string());
                     continue;
                 }
             };
 
-
             #[derive(Debug)]
-            struct Msg{
+            struct Msg {
                 title: String,
                 description: String,
             }
-            let messages:Vec<Msg> = vec![
-                Msg{title: String::from("Everyone is a creator"),description:String::from("Make 500 VEC everytime you post!")},
-                Msg{title: String::from("Earn over 5,000 naira daily"),description:String::from("Make 10 VEC every minute you spend on the app!")},
-                Msg{title: String::from("Lets stack those coins"),description:String::from("Make 500 VEC everytime you post!")}
-            ];
-            let mut rng = thread_rng();
-            let message =match messages.choose(&mut rng) {
-                Some(message)=>{message},
-                None=>{
-                    continue;
-                }
-            };
 
-            for profile in profiles {
-                if profile.app_f_token.is_some(){
-                    // send
-                    let payload = FcmMessage{
-                        message: MessagePayload {
-                            token: profile.app_f_token.unwrap_or_default() ,
-                            notification: Notification {
-                                title: message.title.clone(),
-                                body: message.description.clone()
+            let messages = vec![
+                Msg { title: "Everyone is a creator".into(), description: "Make 500 VEC everytime you post!".into() },
+                Msg { title: "Earn over 5,000 naira daily".into(), description: "Make 10 VEC every minute you spend on the app!".into() },
+                Msg { title: "Lets stack those coins".into(), description: "Make 500 VEC everytime you post!".into() },
+            ];
+
+            let mut rng = thread_rng();
+            if let Some(message) = messages.choose(&mut rng) {
+                for profile in profiles {
+                    if let Some(token) = profile.app_f_token {
+                        let payload = FcmMessage {
+                            message: MessagePayload {
+                                token,
+                                notification: Notification {
+                                    title: message.title.clone(),
+                                    body: message.description.clone(),
+                                },
+                                data: None,
                             },
-                            data: None,
-                        },
-                    };
-                    send_app_notification(payload).await;
+                        };
+                        send_app_notification(payload).await;
+                    }
                 }
             }
-         
         } else {
-            eprintln!("Error: Next scheduled time is in the past. This should not happen.");
+            eprintln!("Next scheduled time is in the past. Skipping.");
             continue;
         }
     }
 }
+
 
 pub async fn daily_coin_post_cron_task(db_pool: PgPool)->Result<(), Box<dyn std::error::Error>> {
     //let expression = " 0 0 8,20 * * 0,2,4,5,6"; // Runs at the start of every hour
@@ -291,10 +259,9 @@ pub async fn daily_coin_post_cron_task(db_pool: PgPool)->Result<(), Box<dyn std:
 }
 
 
-pub async fn onehr_comment_cron_taskx(pool: PgPool)->Result<(), Box<dyn std::error::Error>> {
+pub async fn onehr_comment_cron_taskx(pool: PgPool) {
     loop {
-        log::error!("starting daily coin task");
-        sleep(Duration::from_secs(180)).await;
+        sleep(Duration::from_secs(60*60)).await;
         // Perform the task here (e.g., database cleanup, API request, etc.)
         // get all comments and post owners to notify
         
@@ -340,7 +307,7 @@ pub async fn start_jobs(db_pool: PgPool){
 }
 
 #[derive(Debug)]
-struct Msg{
+pub(crate) struct Msg{
     title: String,
-    description: String,
+    pub(crate) description: String,
 }

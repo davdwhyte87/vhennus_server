@@ -33,8 +33,10 @@ use sqlx::postgres::PgPoolOptions;
 use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
+use crate::controllers::jobs_controller;
 use crate::models::user::User;
-use crate::services::daily_post_job_service::{daily_post_cron_task, get_exchange_rate_job, start_jobs};
+use crate::services::daily_post_job_service::{ get_exchange_rate_job, start_jobs};
+use crate::services::jobs_service::AppScheduler;
 use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
@@ -104,8 +106,6 @@ async fn init_db_pool_x()-> PgPool{
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-
-  
     log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
     info!("Starting server..");
 
@@ -154,8 +154,9 @@ async fn main() -> std::io::Result<()> {
     let pool = init_db_pool_x().await;
     
     // start daily post job
-    start_jobs(pool.clone()).await;
-    
+    //start_jobs(pool.clone()).await;
+
+
     if (app_env == "test" || app_env=="prod"){
         let ssl_config = load_ssl_config(
             "/etc/letsencrypt/live/bend.vhennus.com/fullchain.pem",
@@ -233,7 +234,8 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(chats_controller::get_my_chat_pairs)
                         .service(chats_controller::find_chat_pair)
                         .route("/ws", web::get().to(chats_controller::we_chat_connect)),
-                ),
+                )
+            ,
         )
         .service(index)
         .route("/ws", web::get().to(chat_session_service::ws_chat))
@@ -244,7 +246,14 @@ fn configure_services(cfg: &mut ServiceConfig) {
         .service(system_controller::get_system_data)
         .service(download_apk)
         .service(user_controller::get_reset_password_code)
-        .service(user_controller::change_password);
+        .service(user_controller::change_password)
+        .service(
+            web::scope("cron_jobs")
+                .service(jobs_controller::get_exchange_rate_job)
+                .service(jobs_controller::morning_notify_job)
+                .service(jobs_controller::comments_notify)
+        )
+    ;
 }
 
 
