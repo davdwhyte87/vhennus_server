@@ -216,38 +216,6 @@ fn configure_services(cfg: &mut ServiceConfig) {
     ;
 }
 
-
-
-fn load_ssl_config(cert_path: &str, key_path: &str) ->Result<ServerConfig, Box<dyn std::error::Error>> {
-    // Load certificate
-    let cert_file = File::open(cert_path)?;
-    let mut cert_reader = BufReader::new(cert_file);
-    let cert_chain = certs(&mut cert_reader)
-        .map(|certs| certs.into_iter().map(Certificate).collect())
-        .expect("Failed to load certificate chain");
-
-    // Load private key
-    let key_file = File::open(key_path)?;
-    let mut key_reader = BufReader::new(key_file);
-    let mut keys = pkcs8_private_keys(&mut key_reader)
-        .expect("Failed to load private keys");
-
-    if keys.is_empty() {
-        panic!("No private keys found");
-    }
-
-    let key = PrivateKey(keys.remove(0));
-
-    // Configure TLS
-    let config = ServerConfig::builder()
-        .with_safe_defaults()
-        .with_no_client_auth()
-        .with_single_cert(cert_chain, key)
-        .expect("Failed to create ServerConfig");
-
-    Ok(config)
-}
-
 #[derive(Debug, Clone)]
 pub struct Config {
     pub port: String,
@@ -262,8 +230,12 @@ pub struct Config {
 
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| {
-    dotenv().ok();
+    let current_dir = std::env::current_dir().unwrap();
+    error!("Current directory: {:?}", current_dir);
 
+    // Log environment variables
+    dotenv().ok();
+    error!("PORT: {:?}", env::var("PORT"));
     let port = match env::var("PORT"){
         Ok(data)=>{
             data
