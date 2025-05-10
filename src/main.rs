@@ -131,21 +131,8 @@ async fn main() -> std::io::Result<()> {
             panic!()
         }
     };
-
-    // get computer ip
-    let ifaces = get_if_addrs().expect("Failed to get network interfaces");
-
-    // Filter for the first non-loopback IPv4 address
-    let ip_address = ifaces.iter()
-        .filter(|iface| iface.ip().is_ipv4() && !iface.is_loopback())
-        .map(|iface| iface.ip())
-        .next()
-        .expect("No valid IPv4 address found");
-
+    
     let mut  address =format!("{}:{}","0.0.0.0", port);
-    if app_env == "test" || app_env=="prod"{
-        address =format!("{}:{}",ip_address, port);
-    }
     info!("Starting server on {}", address);
 
     // hashmap for holding websocket connections for chat
