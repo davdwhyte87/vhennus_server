@@ -121,20 +121,11 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let port = match env::var("PORT"){
-        Ok(data)=>{
-           data
-        },
-        Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "8000".to_string();
-            panic!()
-        }
-    };
-    
-    let mut  address =format!("{}:{}","0.0.0.0", port);
-    info!("Starting server on {}", address);
-
+    let port: u16 = CONFIG.port.to_owned().parse().ok()  // Option<u16>
+        .unwrap_or(8000);
+    let address = ("0.0.0.0", port);
+    info!("Starting server on {:?}", address);
+    debug!("Starting server on {:?}", address);
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
     //let pool = init_db_pool();
