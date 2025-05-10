@@ -156,37 +156,16 @@ async fn main() -> std::io::Result<()> {
     // start daily post job
     //start_jobs(pool.clone()).await;
 
+    HttpServer::new(move|| {
 
-    if (app_env == "test" || app_env=="prod"){
-        let ssl_config = load_ssl_config(
-            "/etc/letsencrypt/live/bend.vhennus.com/fullchain.pem",
-            "/etc/letsencrypt/live/bend.vhennus.com/privkey.pem"
-        ).expect("Failed to load ssl config");
-        HttpServer::new(move|| {
-
-            App::new()
-                .app_data(Data::new(pool.clone()))
-                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
-                .configure(configure_services)
-        })
-
-            .bind_rustls(address, ssl_config)?
-            .run()
-            .await
-    }else if app_env == "local" {
-        HttpServer::new(move|| {
-
-            App::new()
-                .app_data(Data::new(pool.clone()))
-                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
-                .configure(configure_services)
-        })
-            .bind(address)?
-            .run()
-            .await
-    }else {
-        panic!("Set Environment config");
-    }
+        App::new()
+            .app_data(Data::new(pool.clone()))
+            .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+            .configure(configure_services)
+    })
+        .bind(address)?
+        .run()
+        .await
 }
 
 
