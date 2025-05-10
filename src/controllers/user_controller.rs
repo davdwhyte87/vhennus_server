@@ -101,16 +101,28 @@ pub async fn say_hello(claim:Option<ReqData<Claims>>)-> HttpResponse{
 // }
 
 #[post("/create_account")]
-pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq>)->HttpResponse{
+pub async fn create_account(
+    pool: web::Data<PgPool>,
+    new_user:Result<Json<CreateUserReq>, actix_web::Error>
+)->HttpResponse{
     println!("new req");
-
-    let hashed_password = hash(new_user.password.clone(), DEFAULT_COST).unwrap();
     let mut resp_data = GenericResp::<String>{
         message: "".to_string(),
         server_message: None,
         data: None
     };
-    
+
+    let new_user = match new_user {
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("validation  error  {}", err.to_string());
+            resp_data.message = "Validation error".to_string();
+            resp_data.server_message = Some(err.to_string());
+            resp_data.data = None;
+            return HttpResponse::InternalServerError().json( resp_data);
+        }
+    };
+    let hashed_password = hash(new_user.password.clone(), DEFAULT_COST).unwrap();
     // make sure user name is lowercase 
     if !is_all_lowercase(new_user.user_name.clone().as_str()){
         resp_data.message = "Username should be lowercased".to_string();
@@ -147,6 +159,8 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
         }
     }
     
+
+    
     let user = User{
         user_name:new_user.user_name.to_owned(),
         created_at:get_time_naive(),
@@ -179,11 +193,6 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
 
         match user_res {
             Ok(_)=> {
-         
-                resp_data.message = "Ok".to_string();
-                resp_data.server_message = None;
-                resp_data.data = None;
-                return HttpResponse::Ok().json(resp_data)
             },
             Err(err)=>{
                 
@@ -207,6 +216,31 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
         resp_data.data = None;
         return HttpResponse::BadRequest().json(resp_data) 
     }
+
+    // if there is a referal then update
+    if new_user.referral.is_some(){
+        // get the user and update his referrals
+        let ref_profile = match ProfileService::get_profile(&pool, new_user.referral.to_owned().unwrap()).await{
+            Ok(profile)=>{Some(profile)},
+            Err(err)=>{
+               None 
+            }
+        };
+        
+        // update referal user if he does not already have this user and forget result
+        if ref_profile.is_some(){
+          let mut n_ref_profile = ref_profile.unwrap().clone();  
+            if !n_ref_profile.referred_users.contains(&new_user.user_name.to_owned()){
+                n_ref_profile.referred_users.push(new_user.user_name.to_owned());
+                ProfileService::update_profile(&pool, n_ref_profile).await;
+            }
+        }
+    }
+    
+    resp_data.message = "Ok".to_string();
+    resp_data.server_message = None;
+    resp_data.data = None;
+    HttpResponse::Ok().json(resp_data)
 }
 #[post("/resend_code")]
 pub async fn resend_code(pool:Data<PgPool>, req:Json<ResendCodeReq>)->HttpResponse {

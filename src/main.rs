@@ -184,6 +184,9 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(profile_controller::search)
                         .service(profile_controller::get_friend_suggestion)
                         .service(profile_controller::add_wallet)
+                        .service(profile_controller::activate_earnings)
+                        .service(profile_controller::cashout_earnings)
+                        .service(profile_controller::post_earnings)
                 )
                 .service(
                     web::scope("user")
@@ -261,6 +264,9 @@ pub struct Config {
     pub email:String,
     pub email_password:String,
     pub exchange_rate_api_key:String,
+    pub blockchain_ip:String,
+    pub earnings_wallet:String,
+    pub earnings_wallet_password:String,
 }
 
 
@@ -318,6 +324,36 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             "".to_string();
             panic!()
         }
+    };    
+    let earnings_wallet_password = match env::var("EARNINGS_WALLET_PASSWORD"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("error loading env port {}", err.to_string());
+            "".to_string();
+            panic!()
+        }
+    };
+    let earnings_wallet = match env::var("EARNINGS_WALLET"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("error loading env port {}", err.to_string());
+            "".to_string();
+            panic!()
+        }
+    };
+    let blockchain_ip = match env::var("BLOCKCHAIN_IP"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("error loading env port {}", err.to_string());
+            "".to_string();
+            panic!()
+        }
     };
     Config{
         port: port,
@@ -325,5 +361,8 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
         database_url:database_url,
         email_password:email_password,
         exchange_rate_api_key: exchange_rate_api_key,
+        earnings_wallet,
+        earnings_wallet_password,
+        blockchain_ip
     }
 });

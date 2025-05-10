@@ -8,6 +8,7 @@ pub struct CreateUserReq{
     pub password:String,
     pub user_type:String,
     pub email:String,
+    pub referral:Option<String>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
