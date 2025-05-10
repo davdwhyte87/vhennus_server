@@ -6,3 +6,4 @@ pub mod auth;
 pub mod formatter;
 pub mod general;
 pub mod strings_stuff;
+pub mod vcrypto;

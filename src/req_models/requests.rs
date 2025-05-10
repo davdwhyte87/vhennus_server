@@ -17,7 +17,10 @@ pub struct UpdateProfileReq{
     pub bio:Option<String>, 
     pub image:Option<String>, 
     pub name:Option<String>,
-    pub app_f_token:Option<String>
+    pub app_f_token:Option<String>,
+    pub new_earning:Option<String>,
+    pub new_referrals:Option<Vec<String>>,
+    pub earnings_wallet:Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]

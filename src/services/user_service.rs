@@ -59,7 +59,7 @@ impl UserService{
         let code = rand::thread_rng()
             .gen_range(100_000..1_000_000) ;
         //create user
-        let user_insert = sqlx::query!(
+        let user_insert = sqlx::query_as!(User,
             "INSERT INTO users (id, user_name, email, password_hash, code) 
              VALUES ($1, $2, $3, $4, $5)",
             user.id.clone(),

@@ -13,7 +13,7 @@ pub struct Response {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct BResponse<T> {
     pub status: i32,
     pub message: String,

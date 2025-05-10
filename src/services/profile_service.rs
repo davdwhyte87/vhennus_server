@@ -80,7 +80,12 @@ impl ProfileService {
              bio = COALESCE($3, bio),
              image = COALESCE($4, image),
              app_f_token = COALESCE($5, app_f_token),
-             wallets = COALESCE($6, wallets)
+             wallets = COALESCE($6, wallets),
+             unclaimed_earnings = COALESCE($7, unclaimed_earnings),
+             is_earnings_activated = COALESCE($8, is_earnings_activated),
+             referred_users = $9,
+             earnings_wallet = COALESCE($10, earnings_wallet)
+
          WHERE user_name = $1
          RETURNING user_name, name, bio, image",
             profile.user_name,
@@ -88,7 +93,11 @@ impl ProfileService {
             profile.bio,
             profile.image,
             profile.app_f_token,
-            profile.wallets
+            profile.wallets,
+            profile.unclaimed_earnings,
+            profile.is_earnings_activated,
+            &profile.referred_users,
+            profile.earnings_wallet
         )
             .fetch_one(pool)
             .await?;
