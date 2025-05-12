@@ -257,6 +257,25 @@ impl PostService {
             Ok(post_with_comments)
     }
 
+
+    pub async fn get_last_1hr_comments(pool:&PgPool)->Result<Vec<PostNotificationTarget>, Box<dyn Error>>{
+
+        // get comments with post
+        let data = sqlx::query_as!(PostNotificationTarget,
+            r#"SELECT
+                 posts.id,
+                 posts.user_name,
+                 profiles.app_f_token AS token
+             FROM comments
+             JOIN posts ON  comments.post_id = posts.id
+             JOIN profiles ON posts.user_name = profiles.user_name
+             WHERE comments.created_at >= NOW() - INTERVAL '1 hour'
+       "#
+        ).fetch_all(pool).await?;
+
+        return Ok(data)
+    }
+
     // pub async fn update_post(db:&Database, post:Post)->Result<(), Box<dyn Error>>{
     //     let collection = db.collection::<Post>(POST_SERVICE_COLLECTION);
     //     let update_doc = doc! {
@@ -285,4 +304,19 @@ impl PostService {
 
 
 
+}
+
+#[derive(Debug, sqlx::FromRow)]
+pub struct PostNotificationTarget {
+    pub id: String,
+    pub user_name: String,
+    pub token: Option<String>,
+}
+#[derive(Debug, sqlx::FromRow)]
+struct CommentWithPostOwner {
+    id: i32,
+    text: String,
+    created_at: chrono::NaiveDateTime,
+    post_owner_user_name: i32,
+    post_owner_token: String,
 }

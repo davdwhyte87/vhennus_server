@@ -143,7 +143,7 @@ impl FriendRequestService {
     // }
 
     
-    pub async fn accept_friend_request(pool:&PgPool, request_id:String, owner_user_name:String)->Result<(),Box<dyn Error>> {
+    pub async fn accept_friend_request(pool:&PgPool, request_id:String, owner_user_name:String)->Result<FriendRequest,Box<dyn Error>> {
         let mut tx: Transaction<'_, Postgres> = pool.begin().await?;
         // get friend request 
         let fr = Self::get_single_friend_request(pool, request_id.clone()).await?;
@@ -174,7 +174,7 @@ impl FriendRequestService {
             return Err("Failed to create friend".into());
         }
         tx.commit().await?;
-        return Ok(())
+        return Ok(fr)
     }
 
 }

@@ -14,5 +14,7 @@ pub mod  profile_controller;
 pub mod chats_controller;
 pub mod service_errors;
 pub mod download_controller;
+pub mod jobs_controller;
+mod sample_controller;
 
 pub const DIAGNOSIS_CONTROLLER_PATH:&str = "/api/v1";

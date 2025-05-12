@@ -12,8 +12,9 @@ use strum_macros;
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct System {
     pub id: i32,
-    pub price: BigDecimal,
+    pub price: BigDecimal, // usd
     pub android_app_version:String,
     pub trivia_win_amount:BigDecimal,
-    pub apk_link:String
+    pub apk_link:String,
+    pub ngn:BigDecimal,
 }

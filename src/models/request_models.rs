@@ -75,6 +75,32 @@ pub struct  TransferReq{
 
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct  BVerifyWallet{
+    #[validate(length(min=1))]
+    pub address:String,
+    pub message:String,
+    pub signature:String
+}
+#[derive(Debug, Serialize, Deserialize, Validate, Clone)]
+pub struct  BRequest<T>{
+    #[validate(length(min=1))]
+    pub action:String,
+    pub data:T,
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate, Clone)]
+pub struct  BTransfer{
+    pub sender:String,
+    pub receiver:String,
+    pub amount:BigDecimal,
+    pub timestamp:u64,
+    pub id:String,
+    pub signature:String
+}
+
+
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
 pub struct  CreateTestRecordReq{
     #[validate(email)]
     pub nurse_email:String,

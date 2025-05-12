@@ -59,7 +59,7 @@ impl UserService{
         let code = rand::thread_rng()
             .gen_range(100_000..1_000_000) ;
         //create user
-        let user_insert = sqlx::query!(
+        let user_insert = sqlx::query_as!(User,
             "INSERT INTO users (id, user_name, email, password_hash, code) 
              VALUES ($1, $2, $3, $4, $5)",
             user.id.clone(),
@@ -133,6 +133,8 @@ impl UserService{
         return Ok(user);
     }
 
+
+
     pub async fn get_by_email(pool:&PgPool, email:String)->Result<Option<User>, Box<dyn Error>>{
         let user =match  sqlx::query_as!(User, 
         "SELECT * FROM users WHERE email = $1 ", email.clone() )
@@ -189,6 +191,18 @@ impl UserService{
                 return Err(err);
             }
         };
+        Ok(())
+    }
+
+    pub async fn update(pool:&PgPool, user:User)->Result<(), Box<dyn Error>>{
+        let res = sqlx::query_as!(User,
+        "UPDATE users SET 
+                 code=COALESCE($2,code),
+                 password_hash = COALESCE($3, password_hash)
+        WHERE user_name = $1
+        ",user.user_name.clone(), user.code.clone(), user.password_hash.clone() )
+            
+            .execute(pool).await?;
         Ok(())
     }
     

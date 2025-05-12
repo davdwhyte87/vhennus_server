@@ -1,11 +1,11 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::{Local, NaiveDateTime, Utc};
 
 pub fn get_current_time_stamp() ->String{
-    chrono::offset::Utc::now().to_string()
+    Local::now().to_string()
 }
 
 pub fn get_time_naive()->NaiveDateTime{
-    Utc::now().naive_utc()
+    Local::now().naive_local()
 }
 
 pub fn is_all_lowercase(s: &str) -> bool {

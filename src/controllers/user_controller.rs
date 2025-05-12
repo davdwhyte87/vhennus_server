@@ -26,11 +26,13 @@ use crate::models::run_info::RunInfo;
 use crate::models::user::{User};
 use crate::models::wallet::Wallet;
 use crate::req_models::create_user_req::{CreateUserReq};
+use crate::req_models::requests::{ChangePasswordReq, GetPasswordResetCodeReq, UpdateProfileReq};
+use crate::services::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
 use crate::services::email_service::EmailService;
 use crate::services::friend_request_service::{FriendRequestService, FriendRequestWithProfile};
 use crate::services::mongo_service::MongoService;
 
-use crate::services::profile_service::ProfileService;
+use crate::services::profile_service::{MiniProfile, ProfileService};
 use crate::services::tcp::{self, send_to_tcp_server};
 use crate::services::user_service::UserService;
 use crate::services::wallet_service::WalletService;
@@ -99,16 +101,28 @@ pub async fn say_hello(claim:Option<ReqData<Claims>>)-> HttpResponse{
 // }
 
 #[post("/create_account")]
-pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq>)->HttpResponse{
+pub async fn create_account(
+    pool: web::Data<PgPool>,
+    new_user:Result<Json<CreateUserReq>, actix_web::Error>
+)->HttpResponse{
     println!("new req");
-
-    let hashed_password = hash(new_user.password.clone(), DEFAULT_COST).unwrap();
     let mut resp_data = GenericResp::<String>{
         message: "".to_string(),
         server_message: None,
         data: None
     };
-    
+
+    let new_user = match new_user {
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("validation  error  {}", err.to_string());
+            resp_data.message = "Validation error".to_string();
+            resp_data.server_message = Some(err.to_string());
+            resp_data.data = None;
+            return HttpResponse::InternalServerError().json( resp_data);
+        }
+    };
+    let hashed_password = hash(new_user.password.clone(), DEFAULT_COST).unwrap();
     // make sure user name is lowercase 
     if !is_all_lowercase(new_user.user_name.clone().as_str()){
         resp_data.message = "Username should be lowercased".to_string();
@@ -145,6 +159,8 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
         }
     }
     
+
+    
     let user = User{
         user_name:new_user.user_name.to_owned(),
         created_at:get_time_naive(),
@@ -177,11 +193,6 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
 
         match user_res {
             Ok(_)=> {
-         
-                resp_data.message = "Ok".to_string();
-                resp_data.server_message = None;
-                resp_data.data = None;
-                return HttpResponse::Ok().json(resp_data)
             },
             Err(err)=>{
                 
@@ -205,6 +216,31 @@ pub async fn create_account(pool: web::Data<PgPool>, new_user:Json<CreateUserReq
         resp_data.data = None;
         return HttpResponse::BadRequest().json(resp_data) 
     }
+
+    // if there is a referal then update
+    if new_user.referral.is_some(){
+        // get the user and update his referrals
+        let ref_profile = match ProfileService::get_profile(&pool, new_user.referral.to_owned().unwrap()).await{
+            Ok(profile)=>{Some(profile)},
+            Err(err)=>{
+               None 
+            }
+        };
+        
+        // update referal user if he does not already have this user and forget result
+        if ref_profile.is_some(){
+          let mut n_ref_profile = ref_profile.unwrap().clone();  
+            if !n_ref_profile.referred_users.contains(&new_user.user_name.to_owned()){
+                n_ref_profile.referred_users.push(new_user.user_name.to_owned());
+                ProfileService::update_profile(&pool, n_ref_profile).await;
+            }
+        }
+    }
+    
+    resp_data.message = "Ok".to_string();
+    resp_data.server_message = None;
+    resp_data.data = None;
+    HttpResponse::Ok().json(resp_data)
 }
 #[post("/resend_code")]
 pub async fn resend_code(pool:Data<PgPool>, req:Json<ResendCodeReq>)->HttpResponse {
@@ -237,6 +273,79 @@ pub async fn resend_code(pool:Data<PgPool>, req:Json<ResendCodeReq>)->HttpRespon
     }
 }
 
+#[post("/get_reset_password_code")]
+pub async fn get_reset_password_code(
+    pool:Data<PgPool>,
+    req: Result<web::Json<GetPasswordResetCodeReq>, actix_web::Error>,
+)->HttpResponse {
+    let mut respData = GenericResp::<String>{
+        message: "".to_string(),
+        server_message: None,
+        data: None
+    };
+    // validate data
+    let req= match req{
+        Ok(data)=>{data},
+        Err(err)=>{
+            respData.message = "Validation error".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData)
+        }
+    };
+
+    // get user account
+    let user =match UserService::get_by_username(&pool,req.user_name.clone() ).await{
+        Ok(data)=>{match data{
+            Some(user)=>{user},
+            None=>{
+                respData.message = "User account not found".to_string();
+                respData.server_message = None;
+                respData.data = None;
+                return HttpResponse::BadRequest().json(respData)
+            }
+        }},
+        Err(err)=>{
+            log::error!("error getting user {}", err);
+            respData.message = "Error getting user".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+    // derive code
+    let code = rand::thread_rng()
+        .gen_range(100_000..1_000_000) ;
+    //update user
+    let mut new_user = user.clone();
+    new_user.code = Some(code);
+    match UserService::update(&pool, new_user.clone()).await{
+        Ok(_)=>{}
+        Err(err)=>{
+            log::error!("error updating user {}", err);
+            respData.message = "Error updating user".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+    // send email
+    match EmailService::send_reset_password_email(user.email.unwrap_or_default(),code.to_string() ).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            log::error!("error sending reset password email {}", err);
+            respData.message = "Error sending email".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
+    respData.data = None;
+    return HttpResponse::Ok().json(respData);
+}
+
 #[post("/confirm_account")]
 pub async fn confirm_account(pool:Data<PgPool>, req:Json<ConfirmAccountReq>)->HttpResponse {
     let mut resp_data = GenericResp::<String>{
@@ -266,6 +375,85 @@ pub async fn confirm_account(pool:Data<PgPool>, req:Json<ConfirmAccountReq>)->Ht
             return HttpResponse::BadRequest().json(resp_data)
         },
     }
+}
+
+
+#[post("/change_password")]
+pub async fn change_password(
+    pool:Data<PgPool>,
+    req: Result<web::Json<ChangePasswordReq>, actix_web::Error>,
+)->HttpResponse {
+    let mut respData = GenericResp::<String> {
+        message: "".to_string(),
+        server_message: None,
+        data: None
+    };
+
+    let req = match req {
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("validation  error  {}", err.to_string());
+            respData.message = "Validation error".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json( respData);
+        }
+    };
+
+    // get user account
+    let user =match UserService::get_by_username(&pool, req.user_name.clone()).await{
+        Ok(data)=>{match data{
+            Some(user)=>{user},
+            None=>{
+                respData.message = "User account not found".to_string();
+                respData.server_message = None;
+                respData.data = None;
+                return HttpResponse::BadRequest().json(respData)
+            }
+        }},
+        Err(err)=>{
+            log::error!("error getting user {}", err);
+            respData.message = "Error getting user".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+    // check code
+    if req.code != user.code.unwrap_or_default().to_string(){
+        respData.message = "Invalid code".to_string();
+        respData.server_message = None;
+        respData.data = None;
+        return HttpResponse::BadRequest().json(respData)
+    }
+    // update password
+    let hashed_password = match hash(req.password.clone(), DEFAULT_COST){
+        Ok(hashed)=>{hashed},
+        Err(err)=>{
+            log::error!("error encrypting password");
+            respData.message = "Password error".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData)
+        }
+    };
+    let mut new_user = user.clone();
+    new_user.password_hash = hashed_password;
+    match UserService::update(&pool, new_user).await{
+        Ok(_)=>{}
+        Err(err)=>{
+            log::error!("error updating user {}", err);
+            respData.message = "Error updating user".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+
+    respData.message = "Ok".to_string();
+    respData.server_message = None;
+    respData.data = None;
+    return HttpResponse::Ok().json(respData)
 }
 
 
@@ -915,6 +1103,14 @@ pub async fn send_friend_request(
         created_at:get_time_naive(),
         updated_at:get_time_naive(),
     };
+    
+    // make sure user does not send fr to himself
+    if friend_request.user_name == claim.user_name.clone(){
+        respData.message = "Cannot send friend request to self".to_string();
+        respData.server_message = None;
+        respData.data = None;
+        return HttpResponse::BadRequest().json(respData); 
+    }
 
     match FriendRequestService::create_friend_request(&pool, friend_request.clone()).await{
         Ok(data)=>{data}, 
@@ -939,6 +1135,32 @@ pub async fn send_friend_request(
             return HttpResponse::InternalServerError().json(respData); 
         }
     };
+
+    // get user profile
+    let profile = match ProfileService::get_profile(&pool, req.user_name.clone()).await{
+        Ok(profile)=>{profile},
+        Err(err)=>{
+            log::error!("error getting profile {}", err.to_string());
+            Profile::default()
+        }
+    };
+
+    if !profile.user_name.is_empty() && profile.app_f_token.is_some(){
+        // send notification
+        let payload = FcmMessage{
+            message: MessagePayload {
+                token: profile.app_f_token.unwrap_or_default() ,
+                notification: Notification {
+                    title: "New Friend Request".to_string(),
+                    body: "@".to_owned() + &*friend_request.requester.clone()+ &*" just sent you a friend request. Go to your profile to view it!".to_string()
+                },
+                data: None,
+            },
+        };
+        actix_web::rt::spawn(async move {
+            send_app_notification(payload).await;  
+        });
+    }
 
     respData.message = "Ok".to_string();
     respData.server_message = None;
@@ -976,7 +1198,7 @@ pub async fn accept_friend_request(
 
   
  
-    match FriendRequestService::accept_friend_request(&pool, path.id.clone(), claim.user_name.clone() ).await{
+    let fr = match FriendRequestService::accept_friend_request(&pool, path.id.clone(), claim.user_name.clone() ).await{
         Ok(data)=>{data}, 
         Err(err)=>{
             log::error!("error accepting request {}", err);
@@ -987,6 +1209,33 @@ pub async fn accept_friend_request(
             return HttpResponse::InternalServerError().json(respData);
         }
     };
+    
+   
+    // get user profile
+    let profile = match ProfileService::get_profile(&pool, fr.requester).await{
+        Ok(profile)=>{profile},
+        Err(err)=>{
+            log::error!("error getting profile {}", err.to_string());
+            Profile::default()
+        }
+    };
+
+    if !profile.user_name.is_empty() && profile.app_f_token.is_some(){
+        // send notification
+        let payload = FcmMessage{
+            message: MessagePayload {
+                token: profile.app_f_token.unwrap_or_default() ,
+                notification: Notification {
+                    title: "New Friend Request".to_string(),
+                    body: "@".to_owned() + &*fr.user_name.clone()+ &*" Has accepted your friend request!".to_string()
+                },
+                data: None,
+            },
+        };
+        actix_web::rt::spawn(async move {
+            send_app_notification(payload).await;
+        });
+    }
 
     respData.message = "Ok".to_string();
     respData.server_message =None;
@@ -1020,7 +1269,7 @@ pub async fn reject_friend_request(
         }
     };
     
-    match FriendRequestService::reject_friend_request(&pool, path.id.clone(), claim.user_name.clone()).await{
+    match FriendRequestService::reject_friend_request2(&pool, path.id.clone(), claim.user_name.clone()).await{
         Ok(data)=>{data}, 
         Err(err)=>{
             log::error!("error rejecting FR {}", err);

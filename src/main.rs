@@ -33,7 +33,10 @@ use sqlx::postgres::PgPoolOptions;
 use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
+use crate::controllers::jobs_controller;
 use crate::models::user::User;
+use crate::services::daily_post_job_service::{ get_exchange_rate_job, start_jobs};
+use crate::services::jobs_service::AppScheduler;
 use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
@@ -103,7 +106,6 @@ async fn init_db_pool_x()-> PgPool{
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-
     log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
     info!("Starting server..");
 
@@ -119,70 +121,29 @@ async fn main() -> std::io::Result<()> {
         }
     };
 
-    let port = match env::var("PORT"){
-        Ok(data)=>{
-           data
-        },
-        Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "8000".to_string();
-            panic!()
-        }
-    };
-
-    // get computer ip
-    let ifaces = get_if_addrs().expect("Failed to get network interfaces");
-
-    // Filter for the first non-loopback IPv4 address
-    let ip_address = ifaces.iter()
-        .filter(|iface| iface.ip().is_ipv4() && !iface.is_loopback())
-        .map(|iface| iface.ip())
-        .next()
-        .expect("No valid IPv4 address found");
-
-    let mut  address =format!("{}:{}","0.0.0.0", port);
-    if app_env == "test" || app_env=="prod"{
-        address =format!("{}:{}",ip_address, port);
-    }
-    info!("Starting server on {}", address);
-
+    let port: u16 = CONFIG.port.to_owned().parse().ok()  // Option<u16>
+        .unwrap_or(8000);
+    let address = ("0.0.0.0", port);
+    info!("Starting server on {:?}", address);
+    debug!("Starting server on {:?}", address);
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
-
-  
     
-    if (app_env == "test" || app_env=="prod"){
-        let ssl_config = load_ssl_config(
-            "/etc/letsencrypt/live/bend.vhennus.com/fullchain.pem",
-            "/etc/letsencrypt/live/bend.vhennus.com/privkey.pem"
-        ).expect("Failed to load ssl config");
-        HttpServer::new(move|| {
+    // start daily post job
+    //start_jobs(pool.clone()).await;
 
-            App::new()
-                .app_data(Data::new(pool.clone()))
-                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
-                .configure(configure_services)
-        })
+    HttpServer::new(move|| {
 
-            .bind_rustls(address, ssl_config)?
-            .run()
-            .await
-    }else if app_env == "local" {
-        HttpServer::new(move|| {
-
-            App::new()
-                .app_data(Data::new(pool.clone()))
-                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
-                .configure(configure_services)
-        })
-            .bind(address)?
-            .run()
-            .await
-    }else {
-        panic!("Set Environment config");
-    }
+        App::new()
+            .app_data(Data::new(pool.clone()))
+            .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+            .configure(configure_services)
+    })
+        .bind(address)?
+        .run()
+        .await
 }
 
 
@@ -211,7 +172,12 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(profile_controller::get_profile)
                         .service(profile_controller::get_user_profile)
                         .service(profile_controller::get_friends)
-                        .service(profile_controller::search),
+                        .service(profile_controller::search)
+                        .service(profile_controller::get_friend_suggestion)
+                        .service(profile_controller::add_wallet)
+                        .service(profile_controller::activate_earnings)
+                        .service(profile_controller::cashout_earnings)
+                        .service(profile_controller::post_earnings)
                 )
                 .service(
                     web::scope("user")
@@ -219,7 +185,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(user_controller::reject_friend_request)
                         .service(user_controller::send_friend_request)
                         .service(user_controller::get_my_friend_request)
-                        .service(user_controller::delete_profile),
+                        .service(user_controller::delete_profile)
                 )
                 .service(
                     web::scope("chat")
@@ -228,7 +194,8 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(chats_controller::get_my_chat_pairs)
                         .service(chats_controller::find_chat_pair)
                         .route("/ws", web::get().to(chats_controller::we_chat_connect)),
-                ),
+                )
+            ,
         )
         .service(index)
         .route("/ws", web::get().to(chat_session_service::ws_chat))
@@ -237,39 +204,16 @@ fn configure_services(cfg: &mut ServiceConfig) {
         .service(user_controller::confirm_account)
         .service(user_controller::resend_code)
         .service(system_controller::get_system_data)
-        .service(download_apk);
-}
-
-
-
-fn load_ssl_config(cert_path: &str, key_path: &str) ->Result<ServerConfig, Box<dyn std::error::Error>> {
-    // Load certificate
-    let cert_file = File::open(cert_path)?;
-    let mut cert_reader = BufReader::new(cert_file);
-    let cert_chain = certs(&mut cert_reader)
-        .map(|certs| certs.into_iter().map(Certificate).collect())
-        .expect("Failed to load certificate chain");
-
-    // Load private key
-    let key_file = File::open(key_path)?;
-    let mut key_reader = BufReader::new(key_file);
-    let mut keys = pkcs8_private_keys(&mut key_reader)
-        .expect("Failed to load private keys");
-
-    if keys.is_empty() {
-        panic!("No private keys found");
-    }
-
-    let key = PrivateKey(keys.remove(0));
-
-    // Configure TLS
-    let config = ServerConfig::builder()
-        .with_safe_defaults()
-        .with_no_client_auth()
-        .with_single_cert(cert_chain, key)
-        .expect("Failed to create ServerConfig");
-
-    Ok(config)
+        .service(download_apk)
+        .service(user_controller::get_reset_password_code)
+        .service(user_controller::change_password)
+        .service(
+            web::scope("cron_jobs")
+                .service(jobs_controller::get_exchange_rate_job)
+                .service(jobs_controller::morning_notify_job)
+                .service(jobs_controller::comments_notify)
+        )
+    ;
 }
 
 #[derive(Debug, Clone)]
@@ -277,13 +221,21 @@ pub struct Config {
     pub port: String,
     pub database_url: String,
     pub email:String,
-    pub email_password:String
+    pub email_password:String,
+    pub exchange_rate_api_key:String,
+    pub blockchain_ip:String,
+    pub earnings_wallet:String,
+    pub earnings_wallet_password:String,
 }
 
 
 pub static CONFIG: Lazy<Config> = Lazy::new(|| {
-    dotenv().ok();
+    let current_dir = std::env::current_dir().unwrap();
+    error!("Current directory: {:?}", current_dir);
 
+    // Log environment variables
+    dotenv().ok();
+    error!("PORT: {:?}", env::var("PORT"));
     let port = match env::var("PORT"){
         Ok(data)=>{
             data
@@ -291,7 +243,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
         Err(err)=>{
             error!("error loading env port {}", err.to_string());
             "8000".to_string();
-            return panic!()
+            panic!()
         }
     };
 
@@ -300,8 +252,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "8000".to_string();
+            error!("error loading env database url {}", err.to_string());
             panic!()
         }
     };
@@ -311,8 +262,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "8000".to_string();
+            error!("error loading env email {}", err.to_string());
             panic!()
         }
     };
@@ -321,8 +271,43 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "8000".to_string();
+            error!("error loading env email password {}", err.to_string());
+            panic!()
+        }
+    };
+    let exchange_rate_api_key = match env::var("EXCHANGE_API_KEY"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("env error loading exchange api key {}", err.to_string());
+            panic!()
+        }
+    };    
+    let earnings_wallet_password = match env::var("EARNINGS_WALLET_PASSWORD"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("env error loading error wallet password {}", err.to_string());
+            panic!()
+        }
+    };
+    let earnings_wallet = match env::var("EARNINGS_WALLET"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("env error loading earnings wallet {}", err.to_string());
+            panic!()
+        }
+    };
+    let blockchain_ip = match env::var("BLOCKCHAIN_IP"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("env error loading blockchain ip {}", err.to_string());
             panic!()
         }
     };
@@ -330,6 +315,10 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
         port: port,
         email:email,
         database_url:database_url,
-        email_password:email_password
+        email_password:email_password,
+        exchange_rate_api_key: exchange_rate_api_key,
+        earnings_wallet,
+        earnings_wallet_password,
+        blockchain_ip
     }
 });

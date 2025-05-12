@@ -1,5 +1,6 @@
 use mongodb::results::InsertOneResult;
 use serde::Serialize;
+use serde_derive::Deserialize;
 use crate::models::power_up::{PlayerPowerUp, PowerUp};
 use crate::models::run_info::RunInfo;
 use crate::models::wallet::Wallet;
@@ -11,6 +12,13 @@ pub struct Response {
 
 }
 
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct BResponse<T> {
+    pub status: i32,
+    pub message: String,
+    pub data: Option<T>,
+}
 
 
 

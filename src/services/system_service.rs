@@ -29,6 +29,18 @@ impl SystemService {
             .fetch_optional(pool).await?;
         Ok(data)
     }
+    
+    pub async fn update_system_data(pool:&PgPool, system:System)->Result<(), Box<dyn Error>>{
+        let res = sqlx::query_as!(System,
+            "UPDATE system_data 
+            SET 
+                ngn = COALESCE($2, ngn),
+                price = COALESCE($3, price)
+            WHERE id=$1
+             ", 1, system.ngn, system.price).execute(pool).await?;
+        
+        Ok(())
+    }
 
     // pub async  fn update_system(db:&Database, system:&System)->Result<(), Box<dyn Error>>{
     //     let filter = doc! {"id":"1"};

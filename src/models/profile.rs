@@ -18,7 +18,12 @@ pub struct Profile {
     pub image:Option<String>,
     pub created_at:NaiveDateTime,
     pub updated_at:NaiveDateTime,
-    pub app_f_token: Option<String> // app firebase token
+    pub app_f_token: Option<String> ,// app firebase token
+    pub wallets: Option<String>,
+    pub unclaimed_earnings:BigDecimal,
+    pub is_earnings_activated:bool,
+    pub referred_users: Vec<String>,
+    pub earnings_wallet: Option<String>
 }
 
 
