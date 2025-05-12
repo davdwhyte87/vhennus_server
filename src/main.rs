@@ -113,17 +113,9 @@ async fn main() -> std::io::Result<()> {
 
     env::set_var("RUST_BACKTRACE", "full");
     let config = &*CONFIG;
-    
-    let app_env = match env::var("APP_ENV"){
-        Ok(data)=>{data},
-        Err(err)=>{
-            log::error!("error getting mongo url var {}", err.to_string());
-            panic!();
-        }
-    };
 
     let port: u16 = CONFIG.port.to_owned().parse().ok()  // Option<u16>
-        .unwrap_or(8000);
+        .unwrap();
     let address = ("0.0.0.0", port);
     info!("Starting server on {:?}", address);
     debug!("Starting server on {:?}", address);
