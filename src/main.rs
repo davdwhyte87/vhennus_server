@@ -112,7 +112,8 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
     env::set_var("RUST_BACKTRACE", "full");
-
+    let config = &*CONFIG;
+    
     let app_env = match env::var("APP_ENV"){
         Ok(data)=>{data},
         Err(err)=>{
