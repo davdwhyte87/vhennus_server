@@ -243,7 +243,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
         Err(err)=>{
             error!("error loading env port {}", err.to_string());
             "8000".to_string();
-            return panic!()
+            panic!()
         }
     };
 
@@ -252,8 +252,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "8000".to_string();
+            error!("error loading env database url {}", err.to_string());
             panic!()
         }
     };
@@ -263,8 +262,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "8000".to_string();
+            error!("error loading env email {}", err.to_string());
             panic!()
         }
     };
@@ -273,8 +271,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "8000".to_string();
+            error!("error loading env email password {}", err.to_string());
             panic!()
         }
     };
@@ -283,8 +280,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "".to_string();
+            error!("env error loading exchange api key {}", err.to_string());
             panic!()
         }
     };    
@@ -293,8 +289,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "".to_string();
+            error!("env error loading error wallet password {}", err.to_string());
             panic!()
         }
     };
@@ -303,8 +298,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "".to_string();
+            error!("env error loading earnings wallet {}", err.to_string());
             panic!()
         }
     };
@@ -313,8 +307,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             data
         },
         Err(err)=>{
-            error!("error loading env port {}", err.to_string());
-            "".to_string();
+            error!("env error loading blockchain ip {}", err.to_string());
             panic!()
         }
     };

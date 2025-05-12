@@ -890,7 +890,7 @@ pub async fn add_wallet(
 
     if rdata.status != 1{
         // blockchain request failed
-        resp_data.message = resp_data.message.to_owned();
+        resp_data.message = rdata.message.to_owned();
         resp_data.server_message =Some(rdata.message);
         return HttpResponse::BadRequest().json( resp_data);
     }
