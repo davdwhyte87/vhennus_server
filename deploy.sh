@@ -46,6 +46,10 @@ if ! git pull origin "$BRANCH"; then
     exit 1
 fi
 
+# Stop the systemd service if running
+echo "Stopping $SERVICE_NAME..."
+systemctl stop "$SERVICE_NAME"
+
 # Build the Rust project
 if ! cargo build --release; then
     echo "Build failed"
@@ -73,7 +77,7 @@ else
 fi
 
 # Restart the systemd service
-if ! sudo systemctl restart "$SERVICE_NAME"; then
+if ! sudo systemctl start "$SERVICE_NAME"; then
     echo "Failed to restart service $SERVICE_NAME"
     exit 1
 fi
