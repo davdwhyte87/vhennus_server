@@ -34,6 +34,7 @@ use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
 use crate::controllers::jobs_controller;
+use crate::controllers::ref_link_controller::create_ref_link;
 use crate::models::user::User;
 use crate::services::daily_post_job_service::{ get_exchange_rate_job, start_jobs};
 use crate::services::jobs_service::AppScheduler;
@@ -204,6 +205,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
         .service(user_controller::confirm_account)
         .service(user_controller::resend_code)
         .service(system_controller::get_system_data)
+        .service(create_ref_link)
         .service(download_apk)
         .service(user_controller::get_reset_password_code)
         .service(user_controller::change_password)
