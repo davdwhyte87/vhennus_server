@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::BufReader;
 use actix_cors::Cors;
 use actix_web::error::JsonPayloadError;
-use actix_web::{get, http, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
+use actix_web::{get, http, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder, ResponseError};
 use actix_web::web::{resource, route, service, Data, JsonConfig, ServiceConfig};
 use awc::Client;
 
@@ -47,8 +47,11 @@ mod middlewares;
 
 
 #[get("/hello")]
-async fn index() -> impl Responder {
-    "Hello, Bread!"
+async fn index(req: HttpRequest) -> impl Responder {
+    if let Some(cookie)= req.cookie("clickId"){
+        return HttpResponse::Ok().body(format!("hello bread and cookie clickId = {}", cookie.value()))
+    }
+    HttpResponse::Ok().body("Hello bread!")
 }
 // #[get("/db_test")]
 // async fn db_test(pool: web::Data<PgPool>)-> impl Responder {
