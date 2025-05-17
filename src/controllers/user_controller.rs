@@ -5,7 +5,9 @@ use actix_web::{Responder, get, HttpResponse, web::Json, post};
 
 use actix_web::web::{self, Data, ReqData};
 use bcrypt::{hash, verify, DEFAULT_COST};
+use bigdecimal::{BigDecimal, Zero};
 use handlebars::Handlebars;
+use log::error;
 use mongodb::bson::doc;
 use rand::Rng;
 use regex::Replacer;
@@ -33,6 +35,7 @@ use crate::services::friend_request_service::{FriendRequestService, FriendReques
 use crate::services::mongo_service::MongoService;
 
 use crate::services::profile_service::{MiniProfile, ProfileService};
+use crate::services::system_service::SystemService;
 use crate::services::tcp::{self, send_to_tcp_server};
 use crate::services::user_service::UserService;
 use crate::services::wallet_service::WalletService;
@@ -219,6 +222,18 @@ pub async fn create_account(
 
     // if there is a referal then update
     if new_user.referral.is_some(){
+        let sys_data = match SystemService::get_system_data(&pool).await{
+            Ok(sys_data)=>sys_data,
+            Err(err)=>{
+                error!("{}", err);
+                None
+            }
+        };
+       let ref_amount = match sys_data{
+           Some(d)=>{ d.ref_amount},
+           None=>{BigDecimal::zero()}
+       };
+        
         // get the user and update his referrals
         let ref_profile = match ProfileService::get_profile(&pool, new_user.referral.to_owned().unwrap()).await{
             Ok(profile)=>{Some(profile)},
@@ -229,9 +244,11 @@ pub async fn create_account(
         
         // update referal user if he does not already have this user and forget result
         if ref_profile.is_some(){
-          let mut n_ref_profile = ref_profile.unwrap().clone();  
+          let mut n_ref_profile = ref_profile.clone().unwrap();  
             if !n_ref_profile.referred_users.contains(&new_user.user_name.to_owned()){
                 n_ref_profile.referred_users.push(new_user.user_name.to_owned());
+                // ref payment 
+                n_ref_profile.unclaimed_earnings = ref_profile.unwrap().clone().unclaimed_earnings + ref_amount;
                 ProfileService::update_profile(&pool, n_ref_profile).await;
             }
         }
