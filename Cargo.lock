@@ -4951,6 +4951,7 @@ dependencies = [
  "lettre",
  "log",
  "log4rs",
+ "mime",
  "mongodb 3.2.1",
  "once_cell",
  "r2d2-mongodb",
@@ -4970,6 +4971,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-cron-scheduler",
+ "url",
  "uuid",
  "validator",
 ]
