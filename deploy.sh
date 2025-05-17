@@ -50,7 +50,6 @@ fi
 echo "Stopping $SERVICE_NAME..."
 systemctl stop "$SERVICE_NAME"
 
-sqlx migrate run 
 
 # Build the Rust project
 if ! cargo build --release; then
