@@ -56,8 +56,7 @@ if ! cargo build --release; then
     exit 1
 fi
 
-
-# Copy the built executable to the project root
+# Copy the built executable to the project root ---
 if [ -f "$BUILD_DIR/$EXECUTABLE_NAME" ]; then
     cp "$BUILD_DIR/$EXECUTABLE_NAME" "$PROJECT_DIR/build/"
 else
