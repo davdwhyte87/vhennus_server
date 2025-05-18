@@ -3,6 +3,8 @@ use std::{env, fmt, str::FromStr};
 use actix_web::{ get, post, web::{self, Data, ReqData}, HttpResponse, ResponseError};
 use actix_web_validator::Json;
 use bigdecimal::{num_bigint::BigInt, BigDecimal};
+use gcp_auth::provider;
+use log::error;
 use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -11,6 +13,7 @@ use validator::{Validate, ValidationErrors};
 
 use crate::{controllers::buy_order_controller::escrow_to_user, models::{comment::Comment, payment_method::PaymentMethod, post::Post, request_models::TransferReq, response::{GenericResp, Response}, sell_order::{self, Currency, SellOrder}}, req_models::create_sell_order_req::{CreateCommentReq, CreatePostReq, CreateSellOrderReq, UpdateSellOrderReq}, services::{mongo_service::MongoService, post_service::PostService, sell_order_service::SellOrderService, tcp::send_to_tcp_server}, utils::{auth::Claims, formatter}};
 use crate::services::post_service::{PostFeed, PostWithComments};
+use crate::services::profile_service::ProfileService;
 use crate::utils::general::get_time_naive;
 
 #[post("/create")]
@@ -35,17 +38,6 @@ pub async fn create_post(
             return HttpResponse::InternalServerError().json( respData); 
         }
     };
-    // match req.validate(){
-    //     Ok(_)=>{},
-    //     Err(err)=>{
-           
-    //         return HttpResponse::BadRequest().json( err); 
-    //     }
-
-   
-
-    println!("create post request");
-
     let claim = match claim {
         Some(claim)=>{claim},
         None=>{
@@ -84,7 +76,24 @@ pub async fn create_post(
              
         }
     };
-
+    
+    // silently try to pay the user 
+    let profile =match ProfileService::get_profile(&pool, claim.user_name.clone()).await{
+        Ok(profile)=>{Some(profile)},
+        Err(err)=>{
+            error!("error getting profile {}", err);
+            None
+        }
+    };
+    if profile.is_some(){
+        let mut new_profile = profile.clone().unwrap();
+        if new_profile.is_earnings_activated{
+            let post_amount = BigDecimal::from_str("250").unwrap_or_default();
+            new_profile.unclaimed_earnings = new_profile.unclaimed_earnings+post_amount; 
+            ProfileService::update_profile(&pool, new_profile).await;
+        }
+    }
+    
     respData.message = "".to_string();
     respData.server_message = None;
     respData.data = None;

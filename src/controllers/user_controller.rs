@@ -234,6 +234,16 @@ pub async fn create_account(
            None=>{BigDecimal::zero()}
        };
         
+        // get profile of new user 
+        let new_user_profile = match ProfileService::get_profile(&pool, new_user.user_name.clone()).await{
+            Ok(data)=>{Some(data)},
+            Err(err)=>{
+                error!("{}", err);
+                None
+            }
+        };
+        
+        
         // get the user and update his referrals
         let ref_profile = match ProfileService::get_profile(&pool, new_user.referral.to_owned().unwrap()).await{
             Ok(profile)=>{Some(profile)},
@@ -248,8 +258,14 @@ pub async fn create_account(
             if !n_ref_profile.referred_users.contains(&new_user.user_name.to_owned()){
                 n_ref_profile.referred_users.push(new_user.user_name.to_owned());
                 // ref payment 
-                n_ref_profile.unclaimed_earnings = ref_profile.unwrap().clone().unclaimed_earnings + ref_amount;
+                n_ref_profile.unclaimed_earnings = ref_profile.unwrap().clone().unclaimed_earnings + ref_amount.to_owned();
                 ProfileService::update_profile(&pool, n_ref_profile).await;
+                // update the newly registered user unclaimed money
+                if new_user_profile.is_some(){
+                    let mut new_up = new_user_profile.clone().unwrap();
+                    new_up.unclaimed_earnings = ref_amount/2;
+                    ProfileService::update_profile(&pool, new_up ).await;  
+                }
             }
         }
     }
