@@ -10,7 +10,7 @@ jobs:
     steps:
       - name: Trigger morning_notify
         env:
-          API_URL: https://bend.vhennus.com:8000/cron_jobs/morning_notify
+          API_URL: https://bend.vhennus.com/cron_jobs/morning_notify
         run: |
           echo "📅 $(date -u): calling $API_URL"
           curl -X GET "$API_URL" \
@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: Comments Notify
         env:
-          API_URL: https://bend.vhennus.com:8000/cron_jobs/comments_notify
+          API_URL: https://bend.vhennus.com/cron_jobs/comments_notify
         run: |
           echo "📅 $(date -u): calling $API_URL"
           curl -X GET "$API_URL" \
@@ -33,7 +33,7 @@ jobs:
     steps:
       - name: Get excahnge rates
         env:
-          API_URL: https://bend.vhennus.com:8000/cron_jobs/get_exchange_rate
+          API_URL: https://bend.vhennus.com/cron_jobs/get_exchange_rate
         run: |
           echo "📅 $(date -u): calling $API_URL"
           curl -X GET "$API_URL" \
