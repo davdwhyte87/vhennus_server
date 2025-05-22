@@ -88,7 +88,7 @@ pub async fn create_post(
     if profile.is_some(){
         let mut new_profile = profile.clone().unwrap();
         if new_profile.is_earnings_activated{
-            let post_amount = BigDecimal::from_str("250").unwrap_or_default();
+            let post_amount = BigDecimal::from_str("62").unwrap_or_default();
             new_profile.unclaimed_earnings = new_profile.unclaimed_earnings+post_amount; 
             ProfileService::update_profile(&pool, new_profile).await;
         }
