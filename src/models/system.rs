@@ -17,4 +17,6 @@ pub struct System {
     pub trivia_win_amount:BigDecimal,
     pub apk_link:String,
     pub ngn:BigDecimal,
+    pub price_per_min:BigDecimal,
+    pub ref_amount:BigDecimal,
 }

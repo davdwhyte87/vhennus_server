@@ -28,3 +28,4 @@ pub mod app_notify;
 pub mod email_service;
 pub mod daily_post_job_service;
 pub mod jobs_service;
+pub mod ref_click_service;

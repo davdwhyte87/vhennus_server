@@ -3,8 +3,9 @@ use std::{env, error, fmt};
 
 use std::fs::File;
 use std::io::BufReader;
+use actix_cors::Cors;
 use actix_web::error::JsonPayloadError;
-use actix_web::{get, web, App, Error, HttpResponse, HttpServer, Responder, ResponseError};
+use actix_web::{get, http, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder, ResponseError};
 use actix_web::web::{resource, route, service, Data, JsonConfig, ServiceConfig};
 use awc::Client;
 
@@ -34,6 +35,7 @@ use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
 use crate::controllers::jobs_controller;
+use crate::controllers::ref_link_controller::create_ref_link;
 use crate::models::user::User;
 use crate::services::daily_post_job_service::{ get_exchange_rate_job, start_jobs};
 use crate::services::jobs_service::AppScheduler;
@@ -45,8 +47,11 @@ mod middlewares;
 
 
 #[get("/hello")]
-async fn index() -> impl Responder {
-    "Hello, Bread!"
+async fn index(req: HttpRequest) -> impl Responder {
+    if let Some(cookie)= req.cookie("clickId"){
+        return HttpResponse::Ok().body(format!("hello bread and cookie clickId = {}", cookie.value()))
+    }
+    HttpResponse::Ok().body("Hello bread!")
 }
 // #[get("/db_test")]
 // async fn db_test(pool: web::Data<PgPool>)-> impl Responder {
@@ -126,23 +131,46 @@ async fn main() -> std::io::Result<()> {
     
     // start daily post job
     //start_jobs(pool.clone()).await;
+    
+    if(CONFIG.app_env == "test" ||CONFIG.app_env ==  "local"){
+        HttpServer::new(move|| {
+            let cors = Cors::default()
+                // Allow any origin; or .allowed_origin("https://your-frontend.com")
+                .allow_any_origin()
+                // Allow the methods your clients will use
+                .allowed_methods(["GET", "POST", "OPTIONS"])
+                // Allow the headers your clients send
+                .allowed_headers([http::header::CONTENT_TYPE])
+                // Cache preflight response for 1 hour
+                .max_age(3600);
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(web::Data::new(user_connections.clone()))
+                .wrap(cors)// pass data to routes if needed
+                .configure(configure_services)
+        })
+            .bind(address)?
+            .run()
+            .await   
+    }else {
+        HttpServer::new(move|| {
+            App::new()
+                .app_data(Data::new(pool.clone()))
+                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+                .configure(configure_services)
+        })
+            .bind(address)?
+            .run()
+            .await
+    }
 
-    HttpServer::new(move|| {
-
-        App::new()
-            .app_data(Data::new(pool.clone()))
-            .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
-            .configure(configure_services)
-    })
-        .bind(address)?
-        .run()
-        .await
 }
 
 
 
 fn configure_services(cfg: &mut ServiceConfig) {
     cfg
+
         .service(
             web::scope("api/v1/auth")
                 .service(user_controller::say_hello)
@@ -197,6 +225,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
         .service(user_controller::confirm_account)
         .service(user_controller::resend_code)
         .service(system_controller::get_system_data)
+        .service(create_ref_link)
         .service(download_apk)
         .service(user_controller::get_reset_password_code)
         .service(user_controller::change_password)
@@ -219,6 +248,7 @@ pub struct Config {
     pub blockchain_ip:String,
     pub earnings_wallet:String,
     pub earnings_wallet_password:String,
+    pub app_env:String,
 }
 
 
@@ -304,6 +334,15 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             panic!()
         }
     };
+    let app_env = match env::var("APP_ENV"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("env error loading app env{}", err.to_string());
+            panic!()
+        }
+    };
     Config{
         port: port,
         email:email,
@@ -312,6 +351,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
         exchange_rate_api_key: exchange_rate_api_key,
         earnings_wallet,
         earnings_wallet_password,
-        blockchain_ip
+        blockchain_ip,
+        app_env
     }
 });

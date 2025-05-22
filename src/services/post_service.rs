@@ -130,6 +130,7 @@ impl PostService {
                     posts.user_name,
                     profiles.name,
                     profiles.image
+                ORDER BY posts.created_at DESC 
                     "#).fetch_all(pool).await?;
 
 
