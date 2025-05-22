@@ -47,8 +47,7 @@ if ! git pull origin "$BRANCH"; then
 fi
 
 # Stop the systemd service if running
-echo "Stopping $SERVICE_NAME..."
-systemctl stop "$SERVICE_NAME"
+
 
 
 # Build the Rust project
@@ -56,6 +55,9 @@ if ! cargo build --release; then
     echo "Build failed"
     exit 1
 fi
+
+echo "Stopping $SERVICE_NAME..."
+systemctl stop "$SERVICE_NAME"
 
 # Copy the built executable to the project root ---
 if [ -f "$BUILD_DIR/$EXECUTABLE_NAME" ]; then
