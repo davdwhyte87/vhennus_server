@@ -583,7 +583,8 @@ pub async fn cashout_earnings(
         }
     };
     message.data.signature = sig;
-    let message_string = serde_json::to_string(&message).unwrap_or_default();
+    let mut message_string = serde_json::to_string(&message).unwrap_or_default();
+    message_string.push('\n');
     debug!("request to blockchain {}", message_string);
     let result = web::block(move || send_to_tcp_server(message_string,CONFIG.blockchain_ip.to_owned() )).await;
     let res_data = match result {
