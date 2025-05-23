@@ -585,7 +585,7 @@ pub async fn cashout_earnings(
 
     req_data.signature = sig;
     
-    let res_data =match send_to_blockchain::<String, BTransfer>(req_data.clone()).await{
+    let res_data =match send_to_blockchain::<String, BTransfer>(req_data.clone(), "/wallet/transfer".to_string()).await{
         Ok(data)=>{data},
         Err(err)=>{
             error!("{}", err);
@@ -818,7 +818,7 @@ pub async fn add_wallet(
         signature:req.signature.to_owned(),
     };
     
-    let rdata = match send_to_blockchain::<String, BVerifyWallet>(ver_data).await{
+    let rdata = match send_to_blockchain::<String, BVerifyWallet>(ver_data, "/wallet/verify_account".to_string()).await{
         Ok(data)=>{data},
         Err(err)=>{
             error!("{}", err);

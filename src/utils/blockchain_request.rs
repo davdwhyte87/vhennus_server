@@ -7,7 +7,7 @@ use crate::CONFIG;
 use crate::models::app_error::AppError;
 use crate::models::response::BResponse;
 
-pub async fn send_to_blockchain <T:DeserializeOwned, K:Serialize>(req_data:K) ->Result<BResponse<T>, AppError>{
+pub async fn send_to_blockchain <T:DeserializeOwned, K:Serialize>(req_data:K, url:String) ->Result<BResponse<T>, AppError>{
     // send request
     let serialized_payload =match serde_json::to_string(&req_data) {
         Ok(serialized_payload)=>{serialized_payload},
@@ -17,7 +17,7 @@ pub async fn send_to_blockchain <T:DeserializeOwned, K:Serialize>(req_data:K) ->
         }
     };
     let client = Client::new();
-    let url = format!("{}/wallet/transfer", CONFIG.blockchain_address);
+    let url = format!("{}{}", CONFIG.blockchain_address, url);
     debug!("url: {}", url);
     debug!("payload: {}", serialized_payload);
     let response = client
