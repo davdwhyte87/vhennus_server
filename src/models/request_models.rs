@@ -92,7 +92,7 @@ pub struct  BRequest<T>{
 pub struct  BTransfer{
     pub sender:String,
     pub receiver:String,
-    pub amount:BigDecimal,
+    pub amount:String,
     pub timestamp:u64,
     pub id:String,
     pub signature:String
