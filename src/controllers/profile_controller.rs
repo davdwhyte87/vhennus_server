@@ -560,8 +560,7 @@ pub async fn cashout_earnings(
         id: "".to_string(),
         signature: "".to_string(),
     };
-   
-
+    
     let tx_hash = get_transaction_hash(req_data.clone());
     let (priv_key, _) = generate_compressed_pubkey(CONFIG.earnings_wallet_password.to_owned().as_str());
     req_data.id = tx_hash.to_owned();
@@ -597,7 +596,7 @@ pub async fn cashout_earnings(
     };
     if res_data.status == 0 {
         error!("{}", resp_data.message);
-        resp_data.message = "transaction failed".to_string();
+        resp_data.message = resp_data.message;
         resp_data.server_message = None;
         resp_data.data = None;
         return HttpResponse::BadRequest().json(resp_data)
