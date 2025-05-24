@@ -79,7 +79,7 @@ async fn index(req: HttpRequest) -> impl Responder {
 
 async fn init_db_pool_x()-> PgPool{
     dotenv().ok();
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let database_url = CONFIG.database_url.to_owned();
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&database_url)
@@ -248,6 +248,7 @@ pub struct Config {
     pub earnings_wallet:String,
     pub earnings_wallet_password:String,
     pub app_env:String,
+    pub blockchain_address:String
 }
 
 
@@ -342,6 +343,15 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             panic!()
         }
     };
+    let blockchain_address = match env::var("BLOCKCHAIN_ADDRESS"){
+        Ok(data)=>{
+            data
+        },
+        Err(err)=>{
+            error!("env error loading app env blockchain address {}", err.to_string());
+            panic!()
+        }
+    };
     Config{
         port: port,
         email:email,
@@ -351,6 +361,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
         earnings_wallet,
         earnings_wallet_password,
         blockchain_ip,
-        app_env
+        app_env, 
+        blockchain_address
     }
 });

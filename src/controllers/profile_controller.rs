@@ -2,9 +2,10 @@ use std::env;
 use std::io::BufRead;
 use std::str::FromStr;
 use actix_web::{get, post, web::{self, Data, ReqData}, HttpResponse, ResponseError};
+use awc::Client;
 use bigdecimal::{BigDecimal, Zero};
 use chrono::Local;
-use log::{debug, error};
+use log::{debug, error, info};
 use serde::Deserialize;
 use serde_json::from_str;
 use sqlx::PgPool;
@@ -17,6 +18,7 @@ use crate::req_models::requests::AddWallet;
 use crate::services::profile_service::{MiniProfile, ProfileWithFriends};
 use crate::services::tcp::send_to_tcp_server;
 use crate::services::user_service::UserService;
+use crate::utils::blockchain_request::send_to_blockchain;
 use crate::utils::formatter;
 use crate::utils::vcrypto::{generate_compressed_pubkey, get_transaction_hash, sign_transaction};
 
@@ -550,27 +552,25 @@ pub async fn cashout_earnings(
     // send coins on the blockchain
     let sender =  CONFIG.earnings_wallet.to_owned();
     let timestamp =  Local::now().naive_local().timestamp() as u64;
-    let mut message = BRequest{
-        action: "transfer".to_string(),
-        data: BTransfer{
-            sender:  sender.to_owned(),
-            receiver: earnings_wallet.to_owned() ,
-            amount: profile.unclaimed_earnings.to_owned(),
-            timestamp: 0,
-            id: "".to_string(),
-            signature: "".to_string(),
-        },
+    let mut req_data =  BTransfer{
+        sender:  sender.to_owned(),
+        receiver: earnings_wallet.to_owned() ,
+        amount: profile.unclaimed_earnings.to_owned(),
+        timestamp: timestamp,
+        id: "".to_string(),
+        signature: "".to_string(),
     };
-    message.data.timestamp = timestamp;
-    let tx_hash = get_transaction_hash(message.to_owned().data);
+   
+
+    let tx_hash = get_transaction_hash(req_data.clone());
     let (priv_key, _) = generate_compressed_pubkey(CONFIG.earnings_wallet_password.to_owned().as_str());
-    message.data.id = tx_hash.to_owned();
+    req_data.id = tx_hash.to_owned();
     let sig = match sign_transaction(
         sender.as_str(),
-        message.data.receiver.as_str(),
-        message.data.amount.normalized().to_string().as_str(),
+        req_data.receiver.as_str(),
+        req_data.amount.normalized().to_string().as_str(),
         timestamp,
-        message.data.id.as_str(),
+        req_data.id.as_str(),
         priv_key
     ){
         Ok(sig)=>{sig},
@@ -582,36 +582,21 @@ pub async fn cashout_earnings(
             return HttpResponse::InternalServerError().json(resp_data)
         }
     };
-    message.data.signature = sig;
-    let message_string = serde_json::to_string(&message).unwrap_or_default();
-    debug!("request to blockchain {}", message_string);
-    let result = web::block(move || send_to_tcp_server(message_string,CONFIG.blockchain_ip.to_owned() )).await;
-    let res_data = match result {
-        Ok(data)=>{
-            match data {
-                Ok(data)=>{data},
-                Err(err)=>{
-                    error!("{}", err);
-                    resp_data.message = "Error with request".to_string();
-                    resp_data.server_message = None;
-                    resp_data.data = None;
-                    return HttpResponse::InternalServerError().json(resp_data)
-                }
-            }
-        },
+
+    req_data.signature = sig;
+    
+    let res_data =match send_to_blockchain::<String, BTransfer>(req_data.clone(), "/wallet/transfer".to_string()).await{
+        Ok(data)=>{data},
         Err(err)=>{
-            error!("blockchian message error {}", err);
-            resp_data.message = "Error with request".to_string();
+            error!("{}", err);
+            resp_data.message = err.to_string();
             resp_data.server_message = None;
             resp_data.data = None;
-            return HttpResponse::InternalServerError().json(resp_data)
+            return HttpResponse::InternalServerError().json(resp_data)  
         }
     };
-    // perse result
-    let res:BResponse<String> = serde_json::from_str(&res_data).unwrap_or_default();
-    
-    if res.status == 0 {
-        error!("{}", res.message);
+    if res_data.status == 0 {
+        error!("{}", resp_data.message);
         resp_data.message = "transaction failed".to_string();
         resp_data.server_message = None;
         resp_data.data = None;
@@ -824,15 +809,7 @@ pub async fn add_wallet(
         }
     };
 
-    let kura_coin_server_ip = match  env::var("KURACOIN_SERVER_ID"){
-        Ok(data)=>{data.to_owned()},
-        Err(err)=>{
-            println!("{}", err.to_string());
-            resp_data.message = "Error sending data to blockchain".to_string();
-            resp_data.server_message = Some(err.to_string());
-            return HttpResponse::InternalServerError().json( resp_data);
-        }
-    };
+  
     
     // verify from the blockchain 
     let ver_data = BVerifyWallet{
@@ -840,54 +817,16 @@ pub async fn add_wallet(
         message:req.message.to_owned(),
         signature:req.signature.to_owned(),
     };
-    let message = BRequest::<BVerifyWallet>{
-        action:"verify_wallet".to_string(),
-        data:ver_data,
-    };
-    let message_data = match serde_json::to_string(&message){
+    
+    let rdata = match send_to_blockchain::<String, BVerifyWallet>(ver_data, "/wallet/verify_account".to_string()).await{
         Ok(data)=>{data},
         Err(err)=>{
-            println!("{}", err.to_string());
-            resp_data.message = "Error sending data to blockchain".to_string();
-            resp_data.server_message = Some(err.to_string());
-            return HttpResponse::InternalServerError().json( resp_data);
+            error!("{}", err);
+            resp_data.message = err.to_string();
+            resp_data.server_message =None;
+            return HttpResponse::InternalServerError().json( resp_data);  
         }
     };
-   
-
-    let ip = kura_coin_server_ip.clone();
-
-    let result = web::block(move || send_to_tcp_server(message_data.clone(),ip  )).await;
-    let response_string =match result {
-        Ok(data)=>{
-            match data {
-                Ok(data)=>{data},
-                Err(err)=>{
-                    println!("{}", err.to_string());
-                    resp_data.message = "Error from blockchain".to_string();
-                    resp_data.server_message = Some(err.to_string());
-                    return HttpResponse::InternalServerError().json( resp_data);
-                }
-            }
-        },
-        Err(err)=>{
-            println!("{}", err.to_string());
-            resp_data.message = "Error from blockchain".to_string();
-            resp_data.server_message = Some(err.to_string());
-            return HttpResponse::InternalServerError().json( resp_data);
-        }
-    };
-
-    let rdata= match from_str::<BResponse::<String>>(response_string.as_str()){
-        Ok(data)=>{data},
-        Err(err)=>{
-            log::error!("error decoding response {}", err);
-            resp_data.message = "Data Error. Error validating wallet ".to_string();
-            resp_data.server_message = Some(err.to_string());
-            return HttpResponse::InternalServerError().json(resp_data);
-        }
-    };
-
     if rdata.status != 1{
         // blockchain request failed
         resp_data.message = rdata.message.to_owned();

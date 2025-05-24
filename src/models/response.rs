@@ -22,7 +22,7 @@ pub struct BResponse<T> {
 
 
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GenericResp<T> {
     pub message: String,
     pub server_message: Option<String>,
