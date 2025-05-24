@@ -597,7 +597,7 @@ pub async fn cashout_earnings(
     };
     if res_data.status == 0 {
         error!("{}", resp_data.message);
-        resp_data.message = resp_data.message;
+        resp_data.message = "Transaction failed".to_string();
         resp_data.server_message = None;
         resp_data.data = None;
         return HttpResponse::BadRequest().json(resp_data)
