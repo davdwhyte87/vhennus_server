@@ -34,7 +34,7 @@ use sqlx::postgres::PgPoolOptions;
 use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
-use crate::controllers::jobs_controller;
+use crate::controllers::{group_controller, jobs_controller};
 
 use crate::models::user::User;
 use crate::services::daily_post_job_service::{ get_exchange_rate_job, start_jobs};
@@ -43,8 +43,8 @@ use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
 mod middlewares;
-
-
+mod groups;
+mod shared;
 
 #[get("/hello")]
 async fn index(req: HttpRequest) -> impl Responder {
@@ -116,7 +116,7 @@ async fn main() -> std::io::Result<()> {
 
     dotenv().ok();
 
-    env::set_var("RUST_BACKTRACE", "full");
+    //env::set_var("RUST_BACKTRACE", "full");
     let config = &*CONFIG;
 
     let port: u16 = CONFIG.port.to_owned().parse().ok()  // Option<u16>
@@ -207,6 +207,15 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(user_controller::send_friend_request)
                         .service(user_controller::get_my_friend_request)
                         .service(user_controller::delete_profile)
+                )
+                .service(
+                    web::scope("group")
+                        .service(groups::controller::create_group)
+                        .service(groups::controller::create_room)
+                        .service(groups::controller::join_room)
+                        .service(groups::controller::join_room_with_code)
+                        .service(groups::controller::generate_room_code)
+                        .service(groups::controller::update_group)
                 )
                 .service(
                     web::scope("chat")
