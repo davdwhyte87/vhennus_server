@@ -8,7 +8,7 @@ use crate::groups::models::{Group, Room};
 use crate::groups::service::GroupService;
 use crate::models::app_error::AppError;
 use crate::models::response::GenericResp;
-use crate::req_models::requests::{CreateGroupReq, CreateRoomReq, UpdateGroupReq};
+use crate::req_models::requests::{CreateGroupReq, CreateRoomReq, UpdateGroupReq, UpdateRoomReq};
 use crate::services::profile_service::MiniProfile;
 use crate::utils::auth::Claims;
 use crate::utils::general::get_time_naive;
@@ -284,6 +284,49 @@ pub async fn generate_room_code(
     resp_data.message = "Ok".to_string();
     resp_data.server_message = None;
     resp_data.data = Some(code);
+    return HttpResponse::Ok().json(resp_data)
+}
+
+#[post("/update_room")]
+pub async fn update_room(
+    pool:Data<PgPool>,
+    body: Json<UpdateRoomReq>,
+    claim:ReqData<Claims>
+)->HttpResponse {
+    let mut resp_data = GenericResp::<Vec<MiniProfile>> {
+        message: "".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+    let req: UpdateRoomReq = body.into_inner();
+    let claims: Claims = claim.to_owned().into_inner();
+
+    match GroupService::update_room(&pool, &claims, req).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            let mut message:&str ="";
+            match err {
+                AppError::UnauthorizedError=>{
+                    message = "You are not authorized to update this room";
+                },
+                AppError::NotFoundError(_, _)=>{
+                    message = "Room does not exist";
+                },
+                other=>{
+                    error!("{}", other.to_string());
+                    message = "Error updating room";
+                }
+            }
+            resp_data.message = message.to_owned();
+            resp_data.server_message = None;
+            resp_data.data = None;
+            return HttpResponse::InternalServerError().json(resp_data)
+        }
+    };
+
+    resp_data.message = "Room updated successfully".to_string();
+    resp_data.server_message = None;
+    resp_data.data = None;
     return HttpResponse::Ok().json(resp_data)
 }
 

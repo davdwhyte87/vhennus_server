@@ -216,6 +216,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(groups::controller::join_room_with_code)
                         .service(groups::controller::generate_room_code)
                         .service(groups::controller::update_group)
+                        .service(groups::controller::update_room)
                         .service(groups::controller::leave_room)
                 )
                 .service(
