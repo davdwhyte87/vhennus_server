@@ -473,6 +473,24 @@ impl GroupRepo{
         }
         Ok(result)
     }
+
+    pub async fn get_group_with_rooms_by_id(pool:&PgPool, group_id:String)->Result<MyGroupsView, AppError>{
+        // Get the group by ID
+        let group = Self::get_group_by_id(pool, group_id.clone()).await?;
+
+        // Get all rooms for this group
+        let rooms = Self::get_all_rooms_by_group_id(pool, group_id.clone()).await?;
+
+        // Create and return the MyGroupsView
+        let result = MyGroupsView {
+            id: group.id.clone(),
+            name: group.name.clone(),
+            description: group.description.clone(),
+            is_private: group.is_private,
+            created_by: group.user_name.clone(),
+            rooms: rooms,
+        };
+
+        Ok(result)
+    }
 }
-
-

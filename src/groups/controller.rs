@@ -399,3 +399,55 @@ pub async fn get_my_groups(
         }
     }
 }
+
+#[get("/get_group")]
+pub async fn get_group(
+    pool: Data<PgPool>,
+    query: web::Query<HashMap<String, String>>,
+    claim: ReqData<Claims>
+) -> HttpResponse {
+    let mut resp_data = GenericResp::<MyGroupsView> {
+        message: "".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    let default_id = "".to_string();
+    let group_id = query.get("group_id").unwrap_or(&default_id);
+
+    if group_id.is_empty() {
+        resp_data.message = "Group ID is required".to_string();
+        resp_data.server_message = None;
+        resp_data.data = None;
+        return HttpResponse::BadRequest().json(resp_data);
+    }
+
+    match GroupService::get_group_by_id(&pool, group_id.to_string()).await {
+        Ok(group) => {
+            resp_data.message = "Ok".to_string();
+            resp_data.server_message = None;
+            resp_data.data = Some(group);
+            HttpResponse::Ok().json(resp_data)
+        },
+        Err(err) => {
+            let mut message = "Error fetching group";
+            match err {
+                AppError::NotFoundError(_, _) => {
+                    message = "Group not found";
+                    return HttpResponse::NotFound().json(GenericResp::<MyGroupsView> {
+                        message: message.to_string(),
+                        server_message: None,
+                        data: None
+                    });
+                },
+                _ => {
+                    error!("Error fetching group: {}", err);
+                }
+            }
+            resp_data.message = message.to_owned();
+            resp_data.server_message = None;
+            resp_data.data = None;
+            HttpResponse::InternalServerError().json(resp_data)
+        }
+    }
+}

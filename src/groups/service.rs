@@ -303,4 +303,18 @@ impl GroupService{
             }
         }
     }
+
+    pub async fn get_group_by_id(
+        pool:&PgPool,
+        group_id: String
+    )->Result<MyGroupsView, AppError>{
+        // Call the repository function to get a single group with its rooms
+        match GroupRepo::get_group_with_rooms_by_id(pool, group_id.clone()).await{
+            Ok(group) => Ok(group),
+            Err(err) => {
+                error!("error getting group with id {}: {}", group_id, err);
+                Err(err)
+            }
+        }
+    }
 }
