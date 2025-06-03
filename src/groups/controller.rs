@@ -4,7 +4,7 @@ use actix_web::web::{Data, Json, ReqData};
 use log::error;
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::groups::models::{Group, MyGroupsView, Room};
+use crate::groups::models::{Group, MyGroupsView, Room, RoomWithMembersView};
 use crate::groups::service::GroupService;
 use crate::models::app_error::AppError;
 use crate::models::response::GenericResp;
@@ -442,6 +442,110 @@ pub async fn get_group(
                 },
                 _ => {
                     error!("Error fetching group: {}", err);
+                }
+            }
+            resp_data.message = message.to_owned();
+            resp_data.server_message = None;
+            resp_data.data = None;
+            HttpResponse::InternalServerError().json(resp_data)
+        }
+    }
+}
+
+#[get("/get_room")]
+pub async fn get_roomb(
+    pool: Data<PgPool>,
+    query: web::Query<HashMap<String, String>>,
+    claim: ReqData<Claims>
+) -> HttpResponse {
+    let mut resp_data = GenericResp::<RoomWithMembersView> {
+        message: "".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    let default_id = "".to_string();
+    let room_id = query.get("room_id").unwrap_or(&default_id);
+
+    if room_id.is_empty() {
+        resp_data.message = "Room ID is required".to_string();
+        resp_data.server_message = None;
+        resp_data.data = None;
+        return HttpResponse::BadRequest().json(resp_data);
+    }
+
+    match GroupService::get_room_with_members(&pool, room_id.to_string()).await {
+        Ok(room) => {
+            resp_data.message = "Ok".to_string();
+            resp_data.server_message = None;
+            resp_data.data = Some(room);
+            HttpResponse::Ok().json(resp_data)
+        },
+        Err(err) => {
+            let mut message = "Error fetching room";
+            match err {
+                AppError::NotFoundError(_, _) => {
+                    message = "Room not found";
+                    return HttpResponse::NotFound().json(GenericResp::<RoomWithMembersView> {
+                        message: message.to_string(),
+                        server_message: None,
+                        data: None
+                    });
+                },
+                _ => {
+                    error!("Error fetching room: {}", err);
+                }
+            }
+            resp_data.message = message.to_owned();
+            resp_data.server_message = None;
+            resp_data.data = None;
+            HttpResponse::InternalServerError().json(resp_data)
+        }
+    }
+}
+
+#[get("/get_room")]
+pub async fn get_room(
+    pool: Data<PgPool>,
+    query: web::Query<HashMap<String, String>>,
+    claim: ReqData<Claims>
+) -> HttpResponse {
+    let mut resp_data = GenericResp::<RoomWithMembersView> {
+        message: "".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    let default_id = "".to_string();
+    let room_id = query.get("room_id").unwrap_or(&default_id);
+
+    if room_id.is_empty() {
+        resp_data.message = "Room ID is required".to_string();
+        resp_data.server_message = None;
+        resp_data.data = None;
+        return HttpResponse::BadRequest().json(resp_data);
+    }
+
+    match GroupService::get_room_with_members(&pool, room_id.to_string()).await {
+        Ok(room) => {
+            resp_data.message = "Ok".to_string();
+            resp_data.server_message = None;
+            resp_data.data = Some(room);
+            HttpResponse::Ok().json(resp_data)
+        },
+        Err(err) => {
+            let mut message = "Error fetching room";
+            match err {
+                AppError::NotFoundError(_, _) => {
+                    message = "Room not found";
+                    return HttpResponse::NotFound().json(GenericResp::<RoomWithMembersView> {
+                        message: message.to_string(),
+                        server_message: None,
+                        data: None
+                    });
+                },
+                _ => {
+                    error!("Error fetching room: {}", err);
                 }
             }
             resp_data.message = message.to_owned();

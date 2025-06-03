@@ -1,6 +1,7 @@
 use chrono::NaiveDateTime;
 use once_cell::sync::Lazy;
 use serde_derive::{Deserialize, Serialize};
+use crate::services::profile_service::MiniProfile;
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default,)]
 pub struct Group {
@@ -52,6 +53,21 @@ pub struct RoomView{
     pub created_at:NaiveDateTime,
     pub updated_at:NaiveDateTime,
     pub member_count:i64
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default,)]
+pub struct RoomWithMembersView{
+    pub id: String,
+    pub group_id:String,
+    pub name:String,
+    pub description:Option<String>,
+    pub is_private:bool,
+    pub created_by:String,
+    pub code:Option<String>,
+    pub created_at:NaiveDateTime,
+    pub updated_at:NaiveDateTime,
+    pub member_count:i64,
+    pub members: Vec<MiniProfile>
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default,)]

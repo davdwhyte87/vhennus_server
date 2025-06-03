@@ -3,8 +3,9 @@ use actix_web::App;
 use log::{debug, error};
 use sqlx::{query_as, PgPool, Postgres, Transaction};
 use uuid::Uuid;
-use crate::groups::models::{Group, MyGroupsView, Room, RoomView, UserRoom};
+use crate::groups::models::{Group, MyGroupsView, Room, RoomView, RoomWithMembersView, UserRoom};
 use crate::models::app_error::AppError;
+use crate::services::profile_service::MiniProfile;
 use crate::utils::general::get_time_naive;
 
 
@@ -489,6 +490,53 @@ impl GroupRepo{
             is_private: group.is_private,
             created_by: group.user_name.clone(),
             rooms: rooms,
+        };
+
+        Ok(result)
+    }
+
+    pub async fn get_room_with_members(pool: &PgPool, room_id: String) -> Result<RoomWithMembersView, AppError> {
+        // Get the room by ID
+        let room = Self::get_room_by_id(pool, room_id.clone()).await?;
+
+        // Get all members (usernames) for this room
+        let members = sqlx::query_as!(
+            MiniProfile,
+            r#"
+            SELECT 
+                p.user_name, 
+                p.image, 
+                p.bio, 
+                p.name
+            FROM 
+                user_rooms ur
+            JOIN 
+                profiles p ON ur.user_name = p.user_name
+            WHERE 
+                ur.room_id = $1
+            "#,
+            room_id
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|err| {
+            error!("Error fetching room members: {}", err);
+            AppError::FetchDataError
+        })?;
+
+        // Create and return the RoomWithMembersView
+        let result = RoomWithMembersView {
+            id: room.id,
+            group_id: room.group_id,
+            name: room.name,
+            description: room.description,
+            is_private: room.is_private,
+            created_by: room.created_by,
+            code: room.code,
+            created_at: room.created_at,
+            updated_at: room.updated_at,
+            member_count: room.member_count,
+            members,
         };
 
         Ok(result)

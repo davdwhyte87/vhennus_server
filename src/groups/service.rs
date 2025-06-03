@@ -7,7 +7,7 @@ use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::groups::models::{Group, MyGroupsView, Room, UserRoom};
+use crate::groups::models::{Group, MyGroupsView, Room, RoomWithMembersView, UserRoom};
 use crate::groups::repository::GroupRepo;
 use crate::models::app_error::AppError;
 use crate::req_models::requests::{CreateGroupReq, CreateRoomReq, UpdateGroupReq, UpdateProfileReq, UpdateRoomReq};
@@ -313,6 +313,20 @@ impl GroupService{
             Ok(group) => Ok(group),
             Err(err) => {
                 error!("error getting group with id {}: {}", group_id, err);
+                Err(err)
+            }
+        }
+    }
+
+    pub async fn get_room_with_members(
+        pool: &PgPool,
+        room_id: String
+    ) -> Result<RoomWithMembersView, AppError> {
+        // Call the repository function to get a single room with its members
+        match GroupRepo::get_room_with_members(pool, room_id.clone()).await {
+            Ok(room) => Ok(room),
+            Err(err) => {
+                error!("error getting room with id {}: {}", room_id, err);
                 Err(err)
             }
         }
