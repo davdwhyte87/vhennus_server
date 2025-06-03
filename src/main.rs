@@ -218,6 +218,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(groups::controller::update_group)
                         .service(groups::controller::update_room)
                         .service(groups::controller::leave_room)
+                        .service(groups::controller::get_my_groups)
                 )
                 .service(
                     web::scope("chat")

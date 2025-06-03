@@ -4,7 +4,7 @@ use actix_web::web::{Data, Json, ReqData};
 use log::error;
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::groups::models::{Group, Room};
+use crate::groups::models::{Group, MyGroupsView, Room};
 use crate::groups::service::GroupService;
 use crate::models::app_error::AppError;
 use crate::models::response::GenericResp;
@@ -368,4 +368,34 @@ pub async fn leave_room(
     resp_data.server_message = None;
     resp_data.data = None;
     return HttpResponse::Ok().json(resp_data)
+}
+
+#[get("/get_my_groups")]
+pub async fn get_my_groups(
+    pool: Data<PgPool>,
+    claim: ReqData<Claims>
+) -> HttpResponse {
+    let mut resp_data = GenericResp::<Vec<MyGroupsView>> {
+        message: "".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    let claims: Claims = claim.to_owned().into_inner();
+
+    match GroupService::get_my_groups(&pool, &claims).await {
+        Ok(groups) => {
+            resp_data.message = "Ok".to_string();
+            resp_data.server_message = None;
+            resp_data.data = Some(groups);
+            HttpResponse::Ok().json(resp_data)
+        },
+        Err(err) => {
+            let message = "Error fetching groups";
+            resp_data.message = message.to_owned();
+            resp_data.server_message = None;
+            resp_data.data = None;
+            HttpResponse::InternalServerError().json(resp_data)
+        }
+    }
 }

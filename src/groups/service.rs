@@ -7,7 +7,7 @@ use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::groups::models::{Group, Room, UserRoom};
+use crate::groups::models::{Group, MyGroupsView, Room, UserRoom};
 use crate::groups::repository::GroupRepo;
 use crate::models::app_error::AppError;
 use crate::req_models::requests::{CreateGroupReq, CreateRoomReq, UpdateGroupReq, UpdateProfileReq, UpdateRoomReq};
@@ -288,5 +288,19 @@ impl GroupService{
             }
         };
         Ok(())
+    }
+
+    pub async fn get_my_groups(
+        pool:&PgPool,
+        claim: &Claims
+    )->Result<Vec<MyGroupsView>, AppError>{
+        // Call the repository function to get the user's groups
+        match GroupRepo::get_my_groups(pool, claim.user_name.clone()).await{
+            Ok(groups) => Ok(groups),
+            Err(err) => {
+                error!("error getting groups for user {}: {}", claim.user_name, err);
+                Err(err)
+            }
+        }
     }
 }
