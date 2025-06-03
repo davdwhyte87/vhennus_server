@@ -367,7 +367,7 @@ impl GroupRepo{
                     match query_as!(Room,
                         "
                         UPDATE rooms
-                        SET member_count = GREATEST(member_count + 1, 0)
+                        SET member_count = GREATEST(member_count - 1, 0)
                         WHERE id = $1
                         ", room_id.to_owned(),
                     ).execute(pool).await{

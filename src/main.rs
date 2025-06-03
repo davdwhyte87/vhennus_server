@@ -128,10 +128,10 @@ async fn main() -> std::io::Result<()> {
     let user_connections: UserConnections = Arc::new(DashMap::new());
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
-    
+
     // start daily post job
     //start_jobs(pool.clone()).await;
-    
+
     if(CONFIG.app_env == "test" ||CONFIG.app_env ==  "local"){
         HttpServer::new(move|| {
             let cors = Cors::default()
@@ -216,6 +216,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(groups::controller::join_room_with_code)
                         .service(groups::controller::generate_room_code)
                         .service(groups::controller::update_group)
+                        .service(groups::controller::leave_room)
                 )
                 .service(
                     web::scope("chat")

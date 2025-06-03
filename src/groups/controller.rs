@@ -27,7 +27,7 @@ pub async fn create_group(
 
     let req: CreateGroupReq = body.into_inner();
     let claims: Claims = claim.to_owned().into_inner();
-    
+
     match GroupService::create_group(&req,&pool, &claims).await{
         Ok(_)=>{},
         Err(err)=>{
@@ -47,7 +47,7 @@ pub async fn create_group(
             return HttpResponse::InternalServerError().json(resp_data)
         }
     };
-    
+
     resp_data.message = "Ok".to_string();
     resp_data.server_message = None;
     resp_data.data = None;
@@ -96,49 +96,6 @@ pub async fn create_room(
     };
 
     resp_data.message = "Room created successfully".to_string();
-    resp_data.server_message = None;
-    resp_data.data = None;
-    return HttpResponse::Ok().json(resp_data)
-}
-
-#[post("/update_group")]
-pub async fn update_group(
-    pool:Data<PgPool>,
-    body: Json<UpdateGroupReq>,
-    claim:ReqData<Claims>
-)->HttpResponse {
-    let mut resp_data = GenericResp::<Vec<MiniProfile>> {
-        message: "".to_string(),
-        server_message: Some("".to_string()),
-        data: None
-    };
-    let req: UpdateGroupReq = body.into_inner();
-    let claims: Claims = claim.to_owned().into_inner();
-
-    match GroupService::update_group(&pool, &claims,req).await{
-        Ok(_)=>{},
-        Err(err)=>{
-            let mut message:&str ="";
-            match err {
-                AppError::UnauthorizedError=>{
-                    message = "You are not authorized to create this this room";
-                },
-                AppError::NotFoundError(String, data)=>{
-                    message = "Group does not exist";
-                },
-                other=>{
-                    error!("{}", other.to_string());
-                    message = "Error updating group";
-                }
-            }
-            resp_data.message = message.to_owned();
-            resp_data.server_message = None;
-            resp_data.data = None;
-            return HttpResponse::InternalServerError().json(resp_data)
-        }
-    };
-
-    resp_data.message = "Group updated successfully".to_string();
     resp_data.server_message = None;
     resp_data.data = None;
     return HttpResponse::Ok().json(resp_data)
@@ -327,5 +284,45 @@ pub async fn generate_room_code(
     resp_data.message = "Ok".to_string();
     resp_data.server_message = None;
     resp_data.data = Some(code);
+    return HttpResponse::Ok().json(resp_data)
+}
+
+#[get("/leave_room")]
+pub async fn leave_room(
+    pool:Data<PgPool>,
+    query: web::Query<HashMap<String, String>>,
+    claim:ReqData<Claims>
+)->HttpResponse {
+    let mut resp_data = GenericResp::<Vec<MiniProfile>> {
+        message: "".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+    let rm = "xxx".to_string();
+    let room_id = query.get("room_id").unwrap_or(&rm);
+    let claims: Claims = claim.to_owned().into_inner();
+
+    match GroupService::leave_room(&pool, &claims, room_id).await{
+        Ok(_)=>{},
+        Err(err)=>{
+            let mut message:&str ="";
+            match err {
+                AppError::NotFoundError(_, _)=>{
+                    message = "Room does not exist";
+                },
+                other=>{
+                    message = "Error leaving room";
+                }
+            }
+            resp_data.message = message.to_owned();
+            resp_data.server_message = None;
+            resp_data.data = None;
+            return HttpResponse::InternalServerError().json(resp_data)
+        }
+    };
+
+    resp_data.message = "Successfully left room".to_string();
+    resp_data.server_message = None;
+    resp_data.data = None;
     return HttpResponse::Ok().json(resp_data)
 }

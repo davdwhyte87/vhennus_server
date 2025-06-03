@@ -15,7 +15,7 @@ use crate::utils::auth::Claims;
 use crate::utils::general::get_time_naive;
 
 pub struct GroupService{
-    
+
 }
 impl GroupService{
     pub async fn create_group(
@@ -23,7 +23,7 @@ impl GroupService{
         pool:&PgPool,
         claim:&Claims
     )->Result<(), AppError>{
-        
+
         let group = Group{
             id: Uuid::new_v4().to_string(),
             user_name: claim.user_name.clone(),
@@ -44,7 +44,7 @@ impl GroupService{
         };
         return Ok(())
     }
-    
+
     pub async fn create_room(
         pool:&PgPool,
         req:&CreateRoomReq,
@@ -54,7 +54,7 @@ impl GroupService{
         // get the group 
         let group =  GroupRepo::get_group_by_id(pool, req.group_id.clone()).await
             .map_err(|err| err)?;
-        
+
         if group.user_name != claim.user_name{
             return Err(AppError::UnauthorizedError)
         }
@@ -85,10 +85,10 @@ impl GroupService{
             updated_at: get_time_naive(),
         };
         GroupRepo::create_room(&pool, &room).await.map_err(|err| err)?;
-        
+
         Ok(())
     }
-    
+
     pub async fn join_room(
         pool:&PgPool,
         claim: &Claims,
@@ -260,6 +260,30 @@ impl GroupService{
         match GroupRepo::update_room(pool, &room).await{
             Ok(_)=>{},
             Err(err)=>{
+                return Err(err);
+            }
+        };
+        Ok(())
+    }
+
+    pub async fn leave_room(
+        pool:&PgPool,
+        claim: &Claims,
+        room_id:&String
+    )->Result<(), AppError>{
+        // make sure room exists
+        let room = match GroupRepo::get_room_by_id(pool, room_id.clone()).await{
+            Ok(data) => data,
+            Err(err)=>{
+                return Err(err);
+            }
+        };
+
+        // Call the repository function to exit the room
+        match GroupRepo::exit_room(pool, claim.user_name.clone(), room_id.clone()).await{
+            Ok(_)=>{},
+            Err(err)=>{
+                error!("error leaving room {}{}", claim.user_name, err );
                 return Err(err);
             }
         };
