@@ -383,19 +383,6 @@ impl GroupService{
     ) -> Result<(), Error> {
         debug!("working on connections");
 
-        if !Self::check_if_user_can_connect(pool,user_id.to_owned(), room_id.to_owned()).await{
-            return Err(actix_web::error::ErrorUnauthorized("You cannot join this room"));
-        }
-        // add user session if its not already there
-        connections.entry(user_id.clone()).or_insert(session.clone());
-        // Register the user in room
-        room_members
-            .entry(room_id.to_string())
-            .or_default()
-            .entry(user_id.to_owned())
-            .or_insert_with(|| {
-                println!("User {} connected to room {}", user_id, room_id);
-            });
         //println!("User {} connected to room {}", user_id, room_id.to_owned());
 
         while let Some(Ok(msg)) = msg_stream.next().await {
@@ -430,7 +417,7 @@ impl GroupService{
                                     },
                                     Err(err)=>{
                                         log::error!("{}", err);
-                                        return Err(actix_web::error::ErrorInternalServerError(""));
+                                        continue
                                     }
                                 };
 
@@ -452,11 +439,16 @@ impl GroupService{
                                             Ok(d)=>{d},
                                             Err(err)=>{
                                                 error!("{}", err);
-                                                return Err(actix_web::error::ErrorInternalServerError("Error decoding string"));
+                                                continue
                                             }
                                         };
                                         let mut session = recipient_session.value().clone();
-                                        session.text(data_str).await.map_err(actix_web::error::ErrorInternalServerError)?;
+                                        match session.text(data_str).await{
+                                            Ok(_)=>{}
+                                            Err(err)=>{
+                                                error!("{}", err);
+                                            }
+                                        };
                                         // Forward message to recipient
                                     } else {
                                         log::debug!("Recipient {} not online", user.to_owned());
@@ -467,7 +459,7 @@ impl GroupService{
                                             Ok(data)=>{data},
                                             Err(err)=>{
                                                 log::error!("error getting profile {}", err.to_string());
-                                                return Err(err.into())
+                                                continue
                                             }
                                         };
                                         log::debug!("got profile :{}", profile.user_name.clone());
@@ -481,7 +473,6 @@ impl GroupService{
                                                     notification: Notification {
                                                         title: req.room_name.clone()+" in: "+&req.group_name.clone(),
                                                         body: truncate_string(req.message.clone()),
-
                                                     },
                                                     data: Some(data_map),
                                                 },
@@ -493,7 +484,7 @@ impl GroupService{
                                                 },
                                                 Err(err)=>{
                                                     log::error!("error sending app notification {}", err.to_string());
-                                                    return Err(err.into())
+                                                    continue
                                                 }
                                             }
                                         }
@@ -503,21 +494,30 @@ impl GroupService{
                             },
                             MessageType::JoinRoom => {
                                 // add user to users sessions and room members in dhashmap
-                                let groups = GroupRepo::get_my_groups()
+                                let rooms = match GroupRepo::get_rooms_by_user_name(pool, user_id.to_owned()).await{
+                                    Ok(rooms)=>{rooms},
+                                    Err(err)=>{
+                                        log::error!("{}", err);
+                                        continue
+                                    }
+                                };
+
+
                                 // add user session if its not already there
                                 connections.entry(user_id.clone()).or_insert(session.clone());
-                                // Register the user in room
-                                room_members
-                                    .entry(req.room_id.to_string())
-                                    .or_default()
-                                    .entry(user_id.to_owned())
-                                    .or_insert_with(|| {
-                                        println!("User {} connected to room {}", user_id, room_id);
-                                    });
+
+                                // Register the user in all rooms he is a part of
+                                for room in rooms {
+                                    room_members
+                                        .entry(room.id.to_string())
+                                        .or_default()
+                                        .entry(user_id.to_owned())
+                                        .or_insert_with(|| {
+                                            println!("User {} connected to room {}", user_id, room_id);
+                                        });
+                                }
                             }
                         }
-
-
                     }
                 }
                 Message::Ping(payload) => {

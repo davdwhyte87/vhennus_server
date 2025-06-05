@@ -575,4 +575,39 @@ impl GroupRepo{
         Ok(message)
     }
 
+    pub async fn get_rooms_by_user_name(pool: &PgPool, user_name: String) -> Result<Vec<Room>, AppError> {
+        // Query to get all rooms a user belongs to
+        let rooms = sqlx::query_as!(
+            Room,
+            r#"
+            SELECT 
+                r.id, 
+                r.group_id, 
+                r.name, 
+                r.description, 
+                r.is_private, 
+                r.created_by, 
+                r.code, 
+                r.member_count, 
+                r.created_at, 
+                r.updated_at
+            FROM 
+                rooms r
+            JOIN 
+                user_rooms ur ON r.id = ur.room_id
+            WHERE 
+                ur.user_name = $1
+            "#,
+            user_name
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|err| {
+            error!("Error fetching rooms for user {}: {}", user_name, err);
+            AppError::FetchDataError
+        })?;
+
+        Ok(rooms)
+    }
+
 }
