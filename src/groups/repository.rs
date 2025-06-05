@@ -3,7 +3,7 @@ use actix_web::App;
 use log::{debug, error};
 use sqlx::{query_as, PgPool, Postgres, Transaction};
 use uuid::Uuid;
-use crate::groups::models::{Group, MyGroupsView, Room, RoomView, RoomWithMembersView, UserRoom};
+use crate::groups::models::{Group, MyGroupsView, Room, RoomMessage, RoomView, RoomWithMembersView, UserRoom};
 use crate::models::app_error::AppError;
 use crate::services::profile_service::MiniProfile;
 use crate::utils::general::get_time_naive;
@@ -541,4 +541,38 @@ impl GroupRepo{
 
         Ok(result)
     }
+
+    pub async fn create_room_message(pool: &PgPool, message: RoomMessage) -> Result<RoomMessage, AppError> {
+        // Execute the insert query
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO room_messages (id, user_name, text, image, room_id, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "#,
+            message.id,
+            message.user_name,
+            message.text,
+            message.image,
+            message.room_id,
+            message.created_at,
+            message.updated_at
+        )
+        .execute(pool)
+        .await
+        .map_err(|err| {
+            error!("Error creating room message: {}", err);
+            if let Some(db_err) = err.as_database_error() {
+                if let Some(code) = db_err.code() {
+                    if code == "23505" {
+                        return AppError::AlreadyExistsError;
+                    }
+                }
+            }
+            AppError::DBInsertError
+        })?;
+
+        // Return the message that was inserted
+        Ok(message)
+    }
+
 }

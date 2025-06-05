@@ -1,14 +1,16 @@
 use std::collections::HashMap;
-use actix_web::{get, post, web, HttpResponse};
+use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
 use actix_web::web::{Data, Json, ReqData};
-use log::error;
+use actix_ws::handle;
+use log::{debug, error};
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::groups::models::{Group, MyGroupsView, Room, RoomWithMembersView};
+use crate::groups::models::{Group, MyGroupsView, Room, RoomMembers, RoomWithMembersView, UserRoomSessions};
 use crate::groups::service::GroupService;
 use crate::models::app_error::AppError;
 use crate::models::response::GenericResp;
 use crate::req_models::requests::{CreateGroupReq, CreateRoomReq, UpdateGroupReq, UpdateRoomReq};
+use crate::services::chat_session_service::{chat_ws_service, UserConnections};
 use crate::services::profile_service::MiniProfile;
 use crate::utils::auth::Claims;
 use crate::utils::general::get_time_naive;
@@ -554,4 +556,63 @@ pub async fn get_room(
             HttpResponse::InternalServerError().json(resp_data)
         }
     }
+}
+
+
+pub async fn connect_to_rooms(
+    pool: Data<PgPool>,
+    claim: ReqData<Claims>,
+    req: HttpRequest,
+    stream: web::Payload,
+    data: web::Data<UserRoomSessions>,
+    room_members: web::Data<RoomMembers>,
+    query: web::Query<HashMap<String, String>>,
+) ->  Result<HttpResponse, Error> {
+    let mut resp_data = GenericResp::<RoomWithMembersView> {
+        message: "".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    let mut room_id: String = query
+        .get("room_id")
+        .cloned()
+        .unwrap_or_default();
+
+    if room_id.is_empty() {
+        resp_data.message = "Room ID is required".to_string();
+        resp_data.server_message = None;
+        resp_data.data = None;
+        return Ok(HttpResponse::BadRequest().json(resp_data));
+    }
+
+
+    let (response,session,
+        mut msg_stream) =match  handle(&req, stream){
+        Ok((response, session, msg_stream))
+        => {(response, session, msg_stream)},
+        Err(err)=>{
+            error!("error {}", err);
+            resp_data.message = "Error connecting".to_string();
+            resp_data.server_message = None;
+            resp_data.data = None;
+            return Ok(HttpResponse::InternalServerError().json(resp_data));
+        }
+
+    };
+
+    debug!("attempting to connect {} to room {}", claim.user_name.to_owned(), room_id.to_owned());
+    actix_web::rt::spawn(async move {
+        GroupService::group_chat_ws(
+            session,
+            msg_stream,
+            claim.user_name.to_owned(),
+            room_id.to_owned(),
+            &claim,
+            data,
+            room_members,
+            &pool).await;
+    });
+
+    Ok(response)
 }

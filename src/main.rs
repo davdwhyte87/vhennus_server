@@ -35,7 +35,7 @@ use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
 use crate::controllers::{group_controller, jobs_controller};
-
+use crate::groups::models::{RoomMembers, UserRoomSessions};
 use crate::models::user::User;
 use crate::services::daily_post_job_service::{ get_exchange_rate_job, start_jobs};
 use crate::services::jobs_service::AppScheduler;
@@ -126,6 +126,8 @@ async fn main() -> std::io::Result<()> {
     debug!("Starting server on {:?}", address);
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
+    let room_members: RoomMembers = Arc::new(DashMap::new());
+    let user_room_sessions: UserRoomSessions = Arc::new(DashMap::new());
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
 
@@ -146,6 +148,8 @@ async fn main() -> std::io::Result<()> {
             App::new()
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
+                .app_data(web::Data::new(room_members.clone()))
+                .app_data(web::Data::new(user_room_sessions.clone()))
                 .wrap(cors)// pass data to routes if needed
                 .configure(configure_services)
         })
@@ -156,7 +160,9 @@ async fn main() -> std::io::Result<()> {
         HttpServer::new(move|| {
             App::new()
                 .app_data(Data::new(pool.clone()))
-                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+                .app_data(web::Data::new(user_connections.clone()))
+                .app_data(web::Data::new(room_members.clone()))
+                .app_data(Data::new(user_room_sessions.clone()))
                 .configure(configure_services)
         })
             .bind(address)?
@@ -221,6 +227,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(groups::controller::get_my_groups)
                         .service(groups::controller::get_group)
                         .service(groups::controller::get_room)
+                        .route("/ws_group", web::get().to(groups::controller::connect_to_rooms))
                 )
                 .service(
                     web::scope("chat")

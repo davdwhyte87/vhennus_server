@@ -1,4 +1,7 @@
+use std::sync::Arc;
+use actix_ws::Session;
 use chrono::NaiveDateTime;
+use dashmap::DashMap;
 use once_cell::sync::Lazy;
 use serde_derive::{Deserialize, Serialize};
 use crate::services::profile_service::MiniProfile;
@@ -106,6 +109,26 @@ pub struct RoomMessage {
     pub updated_at:NaiveDateTime,
 }
 
+pub type RoomMembers = Arc<DashMap<String, DashMap<String,()>>>;
+pub type UserRoomSessions = Arc<DashMap<String, Session>>;
+
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub enum MessageType{
+    #[default]
+    RoomMessage,
+    JoinRoom,
+}
+#[derive(Debug, Serialize, Deserialize, Clone, Default,)]
+pub struct RoomChatReq{
+    pub message_type:MessageType,
+    pub room_id:String,
+    pub room_name:String,
+    pub group_name:String,
+    pub message:String,
+    pub image:Option<String>,
+    pub join_room_code:Option<String>,
+}
 pub static GROUP_CATEGORIES: Lazy<Vec<&'static str>> = Lazy::new(|| {
     vec![
         "technology",
