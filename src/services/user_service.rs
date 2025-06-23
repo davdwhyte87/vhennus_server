@@ -133,6 +133,19 @@ impl UserService{
         return Ok(user);
     }
 
+    pub async fn get_all(pool:&PgPool)->Result<Vec<User>, Box<dyn Error>>{
+        let user =match  sqlx::query_as!(User,
+        "SELECT * FROM users")
+            .fetch_all(pool)
+            .await{
+            Ok(opt) => opt,
+            Err(err) => {
+                return Err(Box::new(err));
+            }
+        };
+        return Ok(user);
+    }
+
 
 
     pub async fn get_by_email(pool:&PgPool, email:String)->Result<Option<User>, Box<dyn Error>>{

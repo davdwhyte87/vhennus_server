@@ -241,6 +241,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                 .service(jobs_controller::get_exchange_rate_job)
                 .service(jobs_controller::morning_notify_job)
                 .service(jobs_controller::comments_notify)
+                .service(jobs_controller::referral_reminder)
         )
     ;
 }
