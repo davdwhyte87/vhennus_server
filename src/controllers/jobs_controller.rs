@@ -6,12 +6,15 @@ use rand::thread_rng;
 use sqlx::PgPool;
 use crate::CONFIG;
 use crate::models::live_rate_resp::LiveRateResponse;
+use crate::models::profile::Profile;
 use crate::models::response::GenericResp;
 use crate::req_models::requests::UpdateProfileReq;
 use crate::services::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
+use crate::services::email_service::EmailService;
 use crate::services::post_service::PostService;
 use crate::services::profile_service::{MiniProfile, ProfileService};
 use crate::services::system_service::SystemService;
+use crate::services::user_service::UserService;
 use crate::utils::auth::Claims;
 
 
@@ -179,5 +182,42 @@ pub async fn get_exchange_rate_job(
         }
     };
     println!("power {:?}", body);
+    return HttpResponse::Ok().json(respData)
+}
+
+#[get("/referral_reminder")]
+pub async fn referral_reminder(
+    pool:Data<PgPool>,
+    req: Result<web::Json<UpdateProfileReq>, actix_web::Error>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse {
+    let mut respData = GenericResp::<Vec<MiniProfile>> {
+        message: "".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+    // get all users
+    let users = match UserService::get_all(&pool).await{
+        Ok(users) => users,
+        Err(err)=>{
+            respData.message = err.to_string();
+            return HttpResponse::InternalServerError().json(respData)
+        }
+    };
+
+    for user in users{
+        actix_rt::spawn(async move {
+            if user.email.is_some(){
+                let email_service = &EmailService::new();
+                match EmailService::send_ref_reminder_email(email_service,user.email.unwrap_or_default()).await {
+                    Ok(_) => {},
+                    Err(err)=>{
+                        log::error!("email error {}", err);
+                    }
+                };
+            }
+        });
+    }
+    respData.message = "Ok".to_string();
     return HttpResponse::Ok().json(respData)
 }
