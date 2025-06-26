@@ -161,7 +161,7 @@ pub async fn create_account(
                 .json(resp_data)
         }
     }
-    
+
 
     
     let user = User{
@@ -191,14 +191,16 @@ pub async fn create_account(
 
     
     // setup player data if the user is a player
+    let code = rand::thread_rng()
+        .gen_range(100_000..1_000_000) ;
     if user.user_type == "USER"{
-        let user_res = UserService::create_user(&pool,user.clone()).await;
+        let user_res = UserService::create_user(&pool,user.clone(), code.clone()).await;
 
         match user_res {
             Ok(_)=> {
             },
             Err(err)=>{
-                
+
                 resp_data.message = "Error creating user".to_string();
                 if err.to_string() == "USER_EXISTS"{
                     resp_data.message = "Username already exists".to_string();
@@ -209,16 +211,23 @@ pub async fn create_account(
                 .json(resp_data)
             }
         }
-    
-        
+
+
         // send email verification
-    
+
     }else{
         resp_data.message = "Wrong user type".to_string();
         resp_data.server_message = None;
         resp_data.data = None;
-        return HttpResponse::BadRequest().json(resp_data) 
+        return HttpResponse::BadRequest().json(resp_data)
     }
+    let email_service = &EmailService::new();
+    match EmailService::send_signup_email2(email_service, user.email.unwrap(),code.to_string() ).await{
+        Ok(_) => {},
+        Err(err)=>{
+            log::error!("Failed to send signup email: {}", err);
+        }
+    };
 
     // if there is a referal then update
     if new_user.referral.is_some(){
@@ -363,7 +372,8 @@ pub async fn get_reset_password_code(
         }
     };
     // send email
-    match EmailService::send_reset_password_email(user.email.unwrap_or_default(),code.to_string() ).await{
+    let email_service = &EmailService::new();
+    match EmailService::send_reset_password_email2(email_service,user.email.unwrap_or_default(),code.to_string() ).await{
         Ok(_)=>{},
         Err(err)=>{
             log::error!("error sending reset password email {}", err);

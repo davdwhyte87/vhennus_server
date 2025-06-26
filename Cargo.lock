@@ -4931,6 +4931,7 @@ dependencies = [
  "actix-ws",
  "anyhow",
  "awc",
+ "base64 0.22.1",
  "bcrypt",
  "bigdecimal",
  "chrono",

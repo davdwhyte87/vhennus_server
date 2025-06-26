@@ -204,10 +204,17 @@ pub async fn referral_reminder(
             return HttpResponse::InternalServerError().json(respData)
         }
     };
+
     for user in users{
         actix_rt::spawn(async move {
             if user.email.is_some(){
-                EmailService::send_ref_reminder_email(user.email.unwrap_or_default()).await ;
+                let email_service = &EmailService::new();
+                match EmailService::send_ref_reminder_email(email_service,user.email.unwrap_or_default()).await {
+                    Ok(_) => {},
+                    Err(err)=>{
+                        log::error!("email error {}", err);
+                    }
+                };
             }
         });
     }

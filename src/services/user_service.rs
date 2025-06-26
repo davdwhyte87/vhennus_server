@@ -45,7 +45,7 @@ pub struct UserView{
 }
 
 impl UserService{
-    pub async fn create_user(pool:&PgPool, user:User)->Result<(), Box<dyn Error>>{
+    pub async fn create_user(pool:&PgPool, user:User, code:i32)->Result<(), Box<dyn Error>>{
         let mut tx: Transaction<'_, Postgres> = match pool.begin().await {
             Ok(tx) => tx,
             Err(_) => return Err("Failed to start transaction".into()),
@@ -56,8 +56,7 @@ impl UserService{
         }
 
 
-        let code = rand::thread_rng()
-            .gen_range(100_000..1_000_000) ;
+
         //create user
         let user_insert = sqlx::query_as!(User,
             "INSERT INTO users (id, user_name, email, password_hash, code) 
@@ -91,14 +90,23 @@ impl UserService{
         }
         
         // send user email
-        match EmailService::send_signup_email(user.email.unwrap(), code.to_string()).await{
-            Ok(email)=>{},
-            Err(err)=>{
-               log::error!("Failed to send signup email: {}", err);
-                let _ = tx.rollback().await;
-                return Err(err);
-            }
-        };
+        // match EmailService::send_signup_email(user.email.unwrap(), code.to_string()).await{
+        //     Ok(email)=>{},
+        //     Err(err)=>{
+        //        log::error!("Failed to send signup email: {}", err);
+        //         let _ = tx.rollback().await;
+        //         return Err(err);
+        //     }
+        // };
+        // let email_service = &EmailService::new();
+        // match EmailService::send_signup_email2(email_service, user.email.unwrap(),code.to_string() ).await{
+        //     Ok(_) => {},
+        //     Err(err)=>{
+        //         log::error!("Failed to send signup email: {}", err);
+        //         let _ = tx.rollback().await;
+        //         return Err(Box::new(err));
+        //     }
+        // };
         if let Err(err) = tx.commit().await {
             log::error!("Failed to commit transaction: {}", err);
             return Err("Transaction commit failed".into());
@@ -197,11 +205,12 @@ impl UserService{
             .execute(pool).await?;
         
         // send user email
-        match EmailService::send_signup_email(email.clone(), code.to_string()).await{
+        let email_service = &EmailService::new();
+        match EmailService::send_signup_email2(email_service,email.clone(), code.to_string()).await{
             Ok(email)=>{},
             Err(err)=>{
                 log::error!("Failed to send signup email: {}", err);
-                return Err(err);
+                return Err(Box::new(err));
             }
         };
         Ok(())

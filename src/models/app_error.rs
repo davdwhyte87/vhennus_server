@@ -10,4 +10,6 @@ pub enum AppError {
 
     #[error("Error error sending blockchain request")]
     BlockChainRequestError,
+    #[error("error sending email")]
+    SendMailError,
 }

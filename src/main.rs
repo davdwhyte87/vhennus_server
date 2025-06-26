@@ -257,7 +257,9 @@ pub struct Config {
     pub earnings_wallet:String,
     pub earnings_wallet_password:String,
     pub app_env:String,
-    pub blockchain_address:String
+    pub blockchain_address:String,
+    pub send_plus_client_id:String,
+    pub send_plus_client_secrete:String
 }
 
 
@@ -361,6 +363,20 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
             panic!()
         }
     };
+    let send_plus_client_id = match env::var("SENDPULSE_CLIENT_ID"){
+        Ok(data)=>{data},
+        Err(err)=>{
+            error!("env error loading send plus-client id {}", err.to_string());
+            panic!()
+        }
+    };
+    let send_plus_client_secrete = match env::var("SENDPULSE_CLIENT_SECRET"){
+        Ok(data)=>{data},
+        Err(err)=>{
+            error!("env error loading send plus-client secrete {}", err.to_string());
+            panic!()
+        }
+    };
     Config{
         port: port,
         email:email,
@@ -371,6 +387,8 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
         earnings_wallet_password,
         blockchain_ip,
         app_env, 
-        blockchain_address
+        blockchain_address,
+        send_plus_client_id,
+        send_plus_client_secrete
     }
 });

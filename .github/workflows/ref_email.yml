@@ -2,13 +2,13 @@ name: Referral Reminder
 
 on:
   schedule:
-    - cron: '0 9 */2 * *'   # runs every day at 01:40 WAT (00:40 UTC)
+    - cron: '0 8 */2 * *'   # runs every day at 01:40 WAT (00:40 UTC)
 
 jobs:
   send_ref_email:
     runs-on: ubuntu-latest
     steps:
-      - name: Send email
+      - name: Send ref email
         env:
           API_URL: https://bend.vhennus.com/cron_jobs/referral_reminder
         run: |
