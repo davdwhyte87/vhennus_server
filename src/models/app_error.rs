@@ -35,4 +35,8 @@ pub enum AppError {
     RequestDataError,
     #[error("Bad request {0}")]
     BadRequestError(String),
+
+    // email errors
+    #[error("Error sending email")]
+    SendMailError
 }
