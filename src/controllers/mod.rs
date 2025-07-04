@@ -16,6 +16,7 @@ pub mod service_errors;
 pub mod download_controller;
 pub mod jobs_controller;
 mod sample_controller;
-pub mod ref_link_controller;
+pub mod group_controller;
+mod room_controller;
 
 pub const DIAGNOSIS_CONTROLLER_PATH:&str = "/api/v1";

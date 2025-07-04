@@ -12,7 +12,7 @@ pub async fn sample_controller(
     req: Result<web::Json<UpdateProfileReq>, actix_web::Error>,
     claim:Option<ReqData<Claims>>
 )->HttpResponse {
-    let mut respData = GenericResp::<Vec<MiniProfile>> {
+    let mut resp_data = GenericResp::<Vec<MiniProfile>> {
         message: "".to_string(),
         server_message: Some("".to_string()),
         data: None
@@ -22,23 +22,23 @@ pub async fn sample_controller(
         Ok(data)=>{data},
         Err(err)=>{
             log::error!("validation  error  {}", err.to_string());
-            respData.message = "Validation error".to_string();
-            respData.server_message = Some(err.to_string());
-            respData.data = None;
-            return HttpResponse::InternalServerError().json( respData);
+            resp_data.message = "Validation error".to_string();
+            resp_data.server_message = Some(err.to_string());
+            resp_data.data = None;
+            return HttpResponse::InternalServerError().json( resp_data);
         }
     };
 
     let claim = match claim {
         Some(claim)=>{claim},
         None=>{
-            respData.message = "Unauthorized".to_string();
+            resp_data.message = "Unauthorized".to_string();
 
             return HttpResponse::Unauthorized()
                 .json(
-                    respData
+                    resp_data
                 )
         }
     };
-    return HttpResponse::Ok().json({})
+    return HttpResponse::Ok().json(resp_data)
 }

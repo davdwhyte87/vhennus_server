@@ -552,23 +552,23 @@ pub async fn cashout_earnings(
     // send coins on the blockchain
     let sender =  CONFIG.earnings_wallet.to_owned();
     let timestamp =  Local::now().naive_local().timestamp() as u64;
+    let amt =  profile.unclaimed_earnings.to_owned().normalized().to_string();
     let mut req_data =  BTransfer{
         sender:  sender.to_owned(),
         receiver: earnings_wallet.to_owned() ,
-        amount: profile.unclaimed_earnings.to_owned(),
+        amount: amt.to_owned(),
         timestamp: timestamp,
         id: "".to_string(),
         signature: "".to_string(),
     };
-   
-
+    
     let tx_hash = get_transaction_hash(req_data.clone());
     let (priv_key, _) = generate_compressed_pubkey(CONFIG.earnings_wallet_password.to_owned().as_str());
     req_data.id = tx_hash.to_owned();
     let sig = match sign_transaction(
         sender.as_str(),
         req_data.receiver.as_str(),
-        req_data.amount.normalized().to_string().as_str(),
+        amt.as_str(),
         timestamp,
         req_data.id.as_str(),
         priv_key
@@ -597,7 +597,7 @@ pub async fn cashout_earnings(
     };
     if res_data.status == 0 {
         error!("{}", resp_data.message);
-        resp_data.message = "transaction failed".to_string();
+        resp_data.message = "Transaction failed".to_string();
         resp_data.server_message = None;
         resp_data.data = None;
         return HttpResponse::BadRequest().json(resp_data)

@@ -30,3 +30,6 @@ pub mod likes;
 pub mod live_rate_resp;
 pub mod app_error;
 pub mod ref_click;
+pub mod group;
+pub mod room;
+pub mod room_message;

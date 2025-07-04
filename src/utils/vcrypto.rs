@@ -13,7 +13,7 @@ pub fn get_transaction_hash(tx:BTransfer) ->String{
     hasher.update(tx.timestamp.to_be_bytes());
     hasher.update(tx.sender.as_bytes());
     hasher.update(tx.receiver.as_bytes());
-    hasher.update(tx.amount.normalized().to_string().as_bytes());
+    hasher.update(tx.amount.as_bytes());
 
     // Finalize and convert to hex string
     let result = hasher.finalize();

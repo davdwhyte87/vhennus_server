@@ -34,8 +34,8 @@ use sqlx::postgres::PgPoolOptions;
 use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
-use crate::controllers::jobs_controller;
-use crate::controllers::ref_link_controller::create_ref_link;
+use crate::controllers::{group_controller, jobs_controller};
+use crate::groups::models::{RoomMembers, UserRoomSessions};
 use crate::models::user::User;
 use crate::services::daily_post_job_service::{ get_exchange_rate_job, start_jobs};
 use crate::services::jobs_service::AppScheduler;
@@ -43,8 +43,8 @@ use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
 mod middlewares;
-
-
+mod groups;
+mod shared;
 
 #[get("/hello")]
 async fn index(req: HttpRequest) -> impl Responder {
@@ -116,29 +116,24 @@ async fn main() -> std::io::Result<()> {
 
     dotenv().ok();
 
-    env::set_var("RUST_BACKTRACE", "full");
-
-    let app_env = match env::var("APP_ENV"){
-        Ok(data)=>{data},
-        Err(err)=>{
-            log::error!("error getting mongo url var {}", err.to_string());
-            panic!();
-        }
-    };
+    //env::set_var("RUST_BACKTRACE", "full");
+    let config = &*CONFIG;
 
     let port: u16 = CONFIG.port.to_owned().parse().ok()  // Option<u16>
-        .unwrap_or(8000);
+        .unwrap();
     let address = ("0.0.0.0", port);
     info!("Starting server on {:?}", address);
     debug!("Starting server on {:?}", address);
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
+    let room_members: RoomMembers = Arc::new(DashMap::new());
+    let user_room_sessions: UserRoomSessions = Arc::new(DashMap::new());
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
-    
+
     // start daily post job
     //start_jobs(pool.clone()).await;
-    
+
     if(CONFIG.app_env == "test" ||CONFIG.app_env ==  "local"){
         HttpServer::new(move|| {
             let cors = Cors::default()
@@ -153,6 +148,8 @@ async fn main() -> std::io::Result<()> {
             App::new()
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
+                .app_data(web::Data::new(room_members.clone()))
+                .app_data(web::Data::new(user_room_sessions.clone()))
                 .wrap(cors)// pass data to routes if needed
                 .configure(configure_services)
         })
@@ -163,7 +160,9 @@ async fn main() -> std::io::Result<()> {
         HttpServer::new(move|| {
             App::new()
                 .app_data(Data::new(pool.clone()))
-                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+                .app_data(web::Data::new(user_connections.clone()))
+                .app_data(web::Data::new(room_members.clone()))
+                .app_data(Data::new(user_room_sessions.clone()))
                 .configure(configure_services)
         })
             .bind(address)?
@@ -216,6 +215,21 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(user_controller::delete_profile)
                 )
                 .service(
+                    web::scope("group")
+                        .service(groups::controller::create_group)
+                        .service(groups::controller::create_room)
+                        .service(groups::controller::join_room)
+                        .service(groups::controller::join_room_with_code)
+                        .service(groups::controller::generate_room_code)
+                        .service(groups::controller::update_group)
+                        .service(groups::controller::update_room)
+                        .service(groups::controller::leave_room)
+                        .service(groups::controller::get_my_groups)
+                        .service(groups::controller::get_group)
+                        .service(groups::controller::get_room)
+                        .route("/ws_group", web::get().to(groups::controller::connect_to_rooms))
+                )
+                .service(
                     web::scope("chat")
                         .service(chats_controller::create_chat)
                         .service(chats_controller::get_by_pair)
@@ -232,7 +246,6 @@ fn configure_services(cfg: &mut ServiceConfig) {
         .service(user_controller::confirm_account)
         .service(user_controller::resend_code)
         .service(system_controller::get_system_data)
-        .service(create_ref_link)
         .service(download_apk)
         .service(user_controller::get_reset_password_code)
         .service(user_controller::change_password)
