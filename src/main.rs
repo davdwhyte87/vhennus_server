@@ -45,6 +45,7 @@ mod req_models;
 mod middlewares;
 mod groups;
 mod shared;
+mod lottery;
 
 #[get("/hello")]
 async fn index(req: HttpRequest) -> impl Responder {

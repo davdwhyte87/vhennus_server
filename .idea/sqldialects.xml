@@ -3,6 +3,7 @@
   <component name="SqlDialectMappings">
     <file url="file://$PROJECT_DIR$/migrations/20250526011135_groups.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/migrations/20250526011142_rooms.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/migrations/20250704214721_lottery.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/old_mig/20250326020437_add_link_system_data.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/old_mig/20250507200323_earnings_profile.sql" dialect="PostgreSQL" />
   </component>
