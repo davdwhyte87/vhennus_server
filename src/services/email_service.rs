@@ -293,4 +293,33 @@ impl EmailService {
         }
     }
 
+
+    pub async  fn send_event_reminder_email(&self, reciever_email:String)->Result<(), AppError>{
+        let template_path = "templates/event.hbs";
+        let template_content = fs::read_to_string(template_path)
+            .expect("Failed to read email template file");
+        #[derive(Serialize)]
+        struct EmailContext {
+        }
+        let context = EmailContext {
+
+        };
+
+        let mut handlebars = Handlebars::new();
+        handlebars
+            .register_template_string("email_template", &template_content)
+            .expect("Failed to register template");
+        let rendered_body = handlebars
+            .render("email_template", &context)
+            .expect("Failed to render template");
+
+        match Self::send_email(&self, &reciever_email,"Announcement/AMA Session", &rendered_body).await{
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!("{}", err);
+                Err(AppError::SendMailError)
+            }
+        }
+    }
+
 }
