@@ -137,13 +137,9 @@ async fn main() -> std::io::Result<()> {
     if(CONFIG.app_env == "test" ||CONFIG.app_env ==  "local"){
         HttpServer::new(move|| {
             let cors = Cors::default()
-                // Allow any origin; or .allowed_origin("https://your-frontend.com")
                 .allow_any_origin()
-                // Allow the methods your clients will use
-                .allowed_methods(["GET", "POST", "OPTIONS"])
-                // Allow the headers your clients send
-                .allowed_headers([http::header::CONTENT_TYPE])
-                // Cache preflight response for 1 hour
+                .allow_any_method()
+                .allow_any_header()
                 .max_age(3600);
             App::new()
                 .app_data(Data::new(pool.clone()))
@@ -175,8 +171,8 @@ async fn main() -> std::io::Result<()> {
 
 
 fn configure_services(cfg: &mut ServiceConfig) {
-    cfg
 
+    cfg
         .service(
             web::scope("api/v1/auth")
                 .service(user_controller::say_hello)
