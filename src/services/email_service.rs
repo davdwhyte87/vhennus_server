@@ -313,7 +313,7 @@ impl EmailService {
             .render("email_template", &context)
             .expect("Failed to render template");
 
-        match Self::send_email(&self, &reciever_email,"Announcement/AMA Session", &rendered_body).await{
+        match Self::send_email(&self, &reciever_email,"Weekly AMA Session", &rendered_body).await{
             Ok(_) => Ok(()),
             Err(err) => {
                 error!("{}", err);
