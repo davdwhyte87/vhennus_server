@@ -51,7 +51,13 @@ impl<S, B> Service<ServiceRequest> for AuthMiddleware<S>
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         // println!("Hi from start. You requested: {}", req.borrow().path());
-
+        if req.method() == Method::OPTIONS {
+            let fut = self.service.call(req);
+            return Box::pin(async move {
+                let res = fut.await?;
+                Ok(res)
+            });
+        }
 
         let header =req.borrow().headers().get("Authorization");
         let header = match header {
