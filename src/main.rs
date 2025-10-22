@@ -124,6 +124,7 @@ async fn main() -> std::io::Result<()> {
     let address = ("0.0.0.0", port);
     info!("Starting server on {:?}", address);
     debug!("Starting server on {:?}", address);
+    debug!("App env {:?}", CONFIG.app_env);
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
     let room_members: RoomMembers = Arc::new(DashMap::new());
