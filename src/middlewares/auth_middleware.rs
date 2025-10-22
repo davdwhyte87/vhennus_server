@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::future::{ready, Ready};
-
+use actix_web::http::Method;
 use actix_web::{dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform}, Error, HttpMessage};
 use actix_web::error::ErrorUnauthorized;
 use actix_web::web::head;
