@@ -280,6 +280,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
     // Log environment variables
     dotenv().ok();
     error!("PORT: {:?}", env::var("PORT"));
+    error!("App Env: {:?}", env::var("APP_ENV"));
     let port = match env::var("PORT"){
         Ok(data)=>{
             data
