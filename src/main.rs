@@ -8,7 +8,7 @@ use actix_web::error::JsonPayloadError;
 use actix_web::{get, http, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder, ResponseError};
 use actix_web::web::{resource, route, service, Data, JsonConfig, ServiceConfig};
 use awc::Client;
-
+use actix_web::middleware::Logger;
 mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
 // use controllers::trivia_game_controller::{self, get_todays_game};
@@ -134,20 +134,22 @@ async fn main() -> std::io::Result<()> {
 
     // start daily post job
     //start_jobs(pool.clone()).await;
-
+    let cors = Cors::default()
+        .allowed_origin("http://localhost:5173")
+        .allow_any_method()
+        .allow_any_header()
+        .max_age(3600);
     if(CONFIG.app_env == "test" ||CONFIG.app_env ==  "local"){
         HttpServer::new(move|| {
-            let cors = Cors::default()
-                .allowed_origin("http://localhost:5173")
-                .allow_any_method()
-                .allow_any_header()
-                .max_age(3600);
+
             App::new()
+                .wrap(Logger::default()) // This will log all requests
+                .wrap(cors)
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
                 .app_data(web::Data::new(room_members.clone()))
                 .app_data(web::Data::new(user_room_sessions.clone()))
-                .wrap(cors)// pass data to routes if needed
+                
                 .configure(configure_services)
         })
             .bind(address)?
@@ -156,6 +158,7 @@ async fn main() -> std::io::Result<()> {
     }else {
         HttpServer::new(move|| {
             App::new()
+                .wrap(cors)
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
                 .app_data(web::Data::new(room_members.clone()))
