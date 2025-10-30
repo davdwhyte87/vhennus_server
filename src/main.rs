@@ -139,7 +139,7 @@ async fn main() -> std::io::Result<()> {
         .allow_any_method()
         .allow_any_header()
         .max_age(3600);
-    if(CONFIG.app_env == "test" ||CONFIG.app_env ==  "local"){
+    if(config.app_env == "test" ||config.app_env ==  "local"){
         HttpServer::new(move|| {
 
             App::new()
