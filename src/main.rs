@@ -139,6 +139,12 @@ async fn main() -> std::io::Result<()> {
         .allow_any_method()
         .allow_any_header()
         .max_age(3600);
+    let cors_prod =  Cors::default()
+        .allowed_origin("http://localhost:5173")
+        .allow_any_method()
+        .allow_any_header()
+        .max_age(3600);
+
     if(config.app_env == "test" ||config.app_env ==  "local"){
         HttpServer::new(move|| {
 
@@ -158,7 +164,7 @@ async fn main() -> std::io::Result<()> {
     }else {
         HttpServer::new(move|| {
             App::new()
-                .wrap(cors)
+                .wrap(cors_prod)
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
                 .app_data(web::Data::new(room_members.clone()))
