@@ -134,20 +134,16 @@ async fn main() -> std::io::Result<()> {
 
     // start daily post job
     //start_jobs(pool.clone()).await;
-    let cors = Cors::default()
-        .allowed_origin("http://localhost:5173")
-        .allow_any_method()
-        .allow_any_header()
-        .max_age(3600);
-    let cors_prod =  Cors::default()
-        .allowed_origin("http://localhost:5173")
-        .allow_any_method()
-        .allow_any_header()
-        .max_age(3600);
+
+
 
     if(config.app_env == "test" ||config.app_env ==  "local"){
         HttpServer::new(move|| {
-
+            let cors = Cors::default()
+                .allowed_origin("http://localhost:5173")
+                .allow_any_method()
+                .allow_any_header()
+                .max_age(3600);
             App::new()
                 .wrap(Logger::default()) // This will log all requests
                 .wrap(cors)
@@ -163,6 +159,11 @@ async fn main() -> std::io::Result<()> {
             .await   
     }else {
         HttpServer::new(move|| {
+            let cors_prod =  Cors::default()
+                .allowed_origin("http://localhost:5173")
+                .allow_any_method()
+                .allow_any_header()
+                .max_age(3600);
             App::new()
                 .wrap(cors_prod)
                 .app_data(Data::new(pool.clone()))
