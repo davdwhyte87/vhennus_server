@@ -45,6 +45,7 @@ mod req_models;
 mod middlewares;
 mod groups;
 mod shared;
+use actix_web::{ options};
 
 #[get("/hello")]
 async fn index(req: HttpRequest) -> impl Responder {
@@ -187,10 +188,19 @@ async fn main() -> std::io::Result<()> {
 }
 
 
+#[options("/api/v1/auth/{tail:.*}")]
+async fn options_handler() -> HttpResponse {
+    HttpResponse::Ok()
+        .append_header(("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"))
+        .append_header(("Access-Control-Allow-Headers", "Content-Type, Authorization, x-requested-with"))
+        .append_header(("Access-Control-Max-Age", "3600"))
+        .finish()
+}
 
 fn configure_services(cfg: &mut ServiceConfig) {
 
     cfg
+        .service(options_handler)
         .service(
             web::scope("api/v1/auth")
                 .service(user_controller::say_hello)
