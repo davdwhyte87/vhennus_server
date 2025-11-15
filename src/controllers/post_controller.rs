@@ -395,18 +395,18 @@ struct ApiError {
    
 }
 
-impl fmt::Display for ApiError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
+// impl fmt::Display for ApiError {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         write!(f, "{}", self.message)
+//     }
+// }
 
-impl ResponseError for ApiError {
-    fn error_response(&self) -> HttpResponse {
-        HttpResponse::build(self.status_code()).json(self)
-    }
-
-    fn status_code(&self) -> actix_web::http::StatusCode {
-        actix_web::http::StatusCode::BAD_REQUEST
-    }
-}
+// impl ResponseError for ApiError {
+//     fn error_response(&self) -> HttpResponse {
+//         HttpResponse::build(self.status_code()).json(self)
+//     }
+//
+//     fn status_code(&self) -> actix_web::http::StatusCode {
+//         actix_web::http::StatusCode::BAD_REQUEST
+//     }
+// }

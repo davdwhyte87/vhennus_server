@@ -265,6 +265,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
         )
         .service(index)
         .route("/ws", web::get().to(chat_session_service::ws_chat))
+        .route("/chat/ws", web::get().to(chats_controller::wsocket_chat_connect) )
         .service(user_controller::create_account)
         .service(user_controller::login)
         .service(user_controller::confirm_account)

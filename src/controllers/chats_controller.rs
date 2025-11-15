@@ -1,10 +1,12 @@
 use actix_web::{cookie::time::error, dev::Path, get, post, web::{self, Data, ReqData}, Error, HttpRequest, HttpResponse};
+use actix_web::error::ErrorUnauthorized;
 use actix_ws::handle;
 use mongodb::bson::doc;
 use serde::Deserialize;
 use sqlx::PgPool;
 use crate::{models::{chat::Chat, chat_pair::ChatPair, circle::Circle, request_models::{CreateChatReq, CreateGroupChatReq}, response::GenericResp}, services::{chat_pair_service::ChatPairService, chat_service::ChatService, chat_session_service::{chat_ws_service, UserConnections}, circle_service::CircleService, mongo_service::MongoService, user_service::UserService}, utils::{auth::Claims, general::get_current_time_stamp}};
 use crate::models::chat_pair::ChatPairView;
+use crate::utils::auth::decode_token;
 
 #[post("/create")]
 pub async fn create_chat(
@@ -498,4 +500,36 @@ pub async fn we_chat_connect(
     Ok(response)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct WsParams {
+    token: String,
+}
+
+pub async fn wsocket_chat_connect(
+    req: HttpRequest,
+    stream: web::Payload,
+    data: web::Data<UserConnections>,
+    query_params: web::Query<WsParams>,
+    pool:Data<PgPool>,
+) -> Result<HttpResponse, Error> {
+
+
+    let claims = authenticate_websocket_token(&query_params.token)
+        .await
+        .map_err(|response| actix_web::error::ErrorUnauthorized(response))?;
+
+
+    let (response,session, mut msg_stream) = handle(&req, stream)?;
+    actix_web::rt::spawn(async move {
+        chat_ws_service(session,  msg_stream, claims.user_name.to_owned(), data, &pool).await;
+    });
+
+    Ok(response)
+}
+
+
+async fn authenticate_websocket_token(token: &str) -> Result<Claims, actix_web::Error> {
+    decode_token(token.to_string())
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Invalid or expired token"))
+}
 

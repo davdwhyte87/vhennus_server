@@ -47,6 +47,7 @@ where
             let fut = self.service.call(req);
             return Box::pin(async move {
                 let res = fut.await?;
+                println!("OPTIONS response status: {}", res.status());
                 Ok(res)
             });
         }
