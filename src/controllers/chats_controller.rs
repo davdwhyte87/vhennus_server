@@ -5,6 +5,7 @@ use mongodb::bson::doc;
 use serde::Deserialize;
 use sqlx::PgPool;
 use crate::{models::{chat::Chat, chat_pair::ChatPair, circle::Circle, request_models::{CreateChatReq, CreateGroupChatReq}, response::GenericResp}, services::{chat_pair_service::ChatPairService, chat_service::ChatService, chat_session_service::{chat_ws_service, UserConnections}, circle_service::CircleService, mongo_service::MongoService, user_service::UserService}, utils::{auth::Claims, general::get_current_time_stamp}};
+use crate::models::chat::GetChatsView;
 use crate::models::chat_pair::ChatPairView;
 use crate::utils::auth::decode_token;
 
@@ -121,6 +122,7 @@ pub async fn get_by_pair(
 struct GetChatspath {
     user_name: String,
 }
+
 #[get("/get_chats/{user_name}")]
 pub async fn get_chats(
     pool:Data<PgPool>,
@@ -128,7 +130,7 @@ pub async fn get_chats(
     claim:Option<ReqData<Claims>>
 )->HttpResponse{
 
-    let mut respData = GenericResp::<Vec<Chat>>{
+    let mut respData = GenericResp::<GetChatsView>{
         message:"".to_string(),
         server_message: Some("".to_string()),
         data: None
@@ -157,11 +159,14 @@ pub async fn get_chats(
         }
     };
 
-    
 
+    let get_chats_view = GetChatsView{
+        chats:chats,
+        chat_pair:chat_pair
+    };
     respData.message = "ok".to_string();
     respData.server_message = None;
-    respData.data = Some(chats);
+    respData.data = Some(get_chats_view);
     return HttpResponse::Ok().json(respData)
 }
 
