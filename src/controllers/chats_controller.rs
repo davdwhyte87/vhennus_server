@@ -116,6 +116,55 @@ pub async fn get_by_pair(
     return HttpResponse::Ok().json(respData)
 }
 
+
+#[derive(Deserialize)]
+struct GetChatspath {
+    user_name: String,
+}
+#[get("/get_chats/{user_name}")]
+pub async fn get_chats(
+    pool:Data<PgPool>,
+    path: web::Path<GetChatspath>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+
+    let mut respData = GenericResp::<Vec<Chat>>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    let chat_pair = match ChatPairService::find_chat_pair(&pool, path.user_name.clone(), claim.unwrap().user_name.clone()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting chat pair {}", err);
+            respData.message = "error getting chat pair".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json( respData);
+        }
+    };
+
+
+    let chats = match ChatService::get_chats_by_pair_id(&pool, chat_pair.id).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting chats {}", err);
+            respData.message = "error getting chats".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json( respData);
+        }
+    };
+
+    
+
+    respData.message = "ok".to_string();
+    respData.server_message = None;
+    respData.data = Some(chats);
+    return HttpResponse::Ok().json(respData)
+}
+
 // #[get("/get_all_chats")]
 // pub async fn get_all_chats(
 //     claim:Option<ReqData<Claims>>,

@@ -257,6 +257,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                     web::scope("chat")
                         .service(chats_controller::create_chat)
                         .service(chats_controller::get_by_pair)
+                        .service(chats_controller::get_chats)
                         .service(chats_controller::get_my_chat_pairs)
                         .service(chats_controller::find_chat_pair)
                         .route("/ws", web::get().to(chats_controller::we_chat_connect)),
