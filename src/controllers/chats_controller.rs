@@ -146,9 +146,10 @@ pub async fn get_chats(
             return HttpResponse::InternalServerError().json( respData);
         }
     };
+    let chat_pair_resp = chat_pair.clone();
+    let pair_id = chat_pair.clone().id;
 
-
-    let chats = match ChatService::get_chats_by_pair_id(&pool, chat_pair.id).await{
+    let chats = match ChatService::get_chats_by_pair_id(&pool, pair_id).await{
         Ok(data)=>{data},
         Err(err)=>{
             log::error!("error getting chats {}", err);
@@ -162,7 +163,7 @@ pub async fn get_chats(
 
     let get_chats_view = GetChatsView{
         chats:chats,
-        chat_pair:chat_pair
+        chat_pair:chat_pair_resp
     };
     respData.message = "ok".to_string();
     respData.server_message = None;
