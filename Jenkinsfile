@@ -12,10 +12,10 @@ pipeline {
          sh 'docker build -t vhennus_server:latest .'
       }
     }
-    stage('Test') {
-      steps {
+//     stage('Test') {
+//       steps {
 //         sh 'cargo test'
-      }
-    }
+//       }
+//     }
   }
 }
