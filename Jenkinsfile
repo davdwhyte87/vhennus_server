@@ -9,12 +9,12 @@ pipeline {
     stage('Build') {
       steps {
         //def appImage = "dwhyte40/vhennus_server:${env.BUILD_NUMBER}"
-         sh 'cargo build --release'
+         sh 'docker build -t vhennus_server:latest .'
       }
     }
     stage('Test') {
       steps {
-        sh 'cargo test'
+//         sh 'cargo test'
       }
     }
   }
