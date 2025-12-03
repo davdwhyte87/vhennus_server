@@ -47,6 +47,7 @@ mod groups;
 mod shared;
 use actix_web::{ options};
 
+
 #[get("/hello")]
 async fn index(req: HttpRequest) -> impl Responder {
     if let Some(cookie)= req.cookie("clickId"){
@@ -141,7 +142,7 @@ async fn main() -> std::io::Result<()> {
     if(config.app_env == "test" ||config.app_env ==  "local"){
         HttpServer::new(move|| {
             let cors = Cors::default()
-                .allowed_origin("http://localhost:5173")
+                .allowed_origin("http://localhost:8081")
                 .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
                 .allowed_headers(vec![
                     http::header::AUTHORIZATION,
@@ -168,7 +169,7 @@ async fn main() -> std::io::Result<()> {
     }else {
         HttpServer::new(move|| {
             let cors_prod =  Cors::default()
-                .allowed_origin("http://localhost:5173")
+                .allowed_origin("http://localhost:8081")
                 .allow_any_method()
                 .allow_any_header()
                 .max_age(3600);
