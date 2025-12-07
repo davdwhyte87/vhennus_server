@@ -142,7 +142,7 @@ async fn main() -> std::io::Result<()> {
     if(config.app_env == "test" ||config.app_env ==  "local"){
         HttpServer::new(move|| {
             let cors = Cors::default()
-                .allowed_origin("http://localhost:8081")
+                .allowed_origin("*")
                 .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
                 .allowed_headers(vec![
                     http::header::AUTHORIZATION,
