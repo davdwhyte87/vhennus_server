@@ -169,7 +169,7 @@ async fn main() -> std::io::Result<()> {
     }else {
         HttpServer::new(move|| {
             let cors_prod =  Cors::default()
-                .allowed_origin("http://localhost:8081")
+                .allowed_origin("https://www.vhennus.com")
                 .allow_any_method()
                 .allow_any_header()
                 .max_age(3600);
