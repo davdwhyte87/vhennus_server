@@ -154,7 +154,13 @@ async fn main() -> std::io::Result<()> {
             .await   
     }else {
         HttpServer::new(move|| {
+            let cors_prod =  Cors::default()
+                .allowed_origin("https://www.vhennus.com")
+                .allow_any_method()
+                .allow_any_header()
+                .max_age(3600);
             App::new()
+                .wrap(cors_prod)
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
                 .configure(configure_services)
