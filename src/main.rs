@@ -170,8 +170,14 @@ async fn main() -> std::io::Result<()> {
         HttpServer::new(move|| {
             let cors_prod =  Cors::default()
                 .allowed_origin("https://www.vhennus.com")
-                .allow_any_method()
-                .allow_any_header()
+                .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+                .allowed_headers(vec![
+                    http::header::AUTHORIZATION,
+                    http::header::ACCEPT,
+                    http::header::CONTENT_TYPE,
+                    http::header::HeaderName::from_static("x-requested-with"),
+                ])
+                .supports_credentials()
                 .max_age(3600);
             App::new()
                 .wrap(cors_prod)
