@@ -1,10 +1,13 @@
 use actix_web::{cookie::time::error, dev::Path, get, post, web::{self, Data, ReqData}, Error, HttpRequest, HttpResponse};
+use actix_web::error::ErrorUnauthorized;
 use actix_ws::handle;
 use mongodb::bson::doc;
 use serde::Deserialize;
 use sqlx::PgPool;
 use crate::{models::{chat::Chat, chat_pair::ChatPair, circle::Circle, request_models::{CreateChatReq, CreateGroupChatReq}, response::GenericResp}, services::{chat_pair_service::ChatPairService, chat_service::ChatService, chat_session_service::{chat_ws_service, UserConnections}, circle_service::CircleService, mongo_service::MongoService, user_service::UserService}, utils::{auth::Claims, general::get_current_time_stamp}};
+use crate::models::chat::GetChatsView;
 use crate::models::chat_pair::ChatPairView;
+use crate::utils::auth::decode_token;
 
 #[post("/create")]
 pub async fn create_chat(
@@ -111,6 +114,60 @@ pub async fn get_by_pair(
     respData.message = "ok".to_string();
     respData.server_message = None;
     respData.data = Some(chats);
+    return HttpResponse::Ok().json(respData)
+}
+
+
+#[derive(Deserialize)]
+struct GetChatspath {
+    user_name: String,
+}
+
+#[get("/get_chats/{user_name}")]
+pub async fn get_chats(
+    pool:Data<PgPool>,
+    path: web::Path<GetChatspath>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+
+    let mut respData = GenericResp::<GetChatsView>{
+        message:"".to_string(),
+        server_message: Some("".to_string()),
+        data: None
+    };
+
+    let chat_pair = match ChatPairService::find_chat_pair(&pool, path.user_name.clone(), claim.unwrap().user_name.clone()).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting chat pair {}", err);
+            respData.message = "error getting chat pair".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json( respData);
+        }
+    };
+    let chat_pair_resp = chat_pair.clone();
+    let pair_id = chat_pair.clone().id;
+
+    let chats = match ChatService::get_chats_by_pair_id(&pool, pair_id).await{
+        Ok(data)=>{data},
+        Err(err)=>{
+            log::error!("error getting chats {}", err);
+            respData.message = "error getting chats".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json( respData);
+        }
+    };
+
+
+    let get_chats_view = GetChatsView{
+        chats:chats,
+        chat_pair:chat_pair_resp
+    };
+    respData.message = "ok".to_string();
+    respData.server_message = None;
+    respData.data = Some(get_chats_view);
     return HttpResponse::Ok().json(respData)
 }
 
@@ -498,4 +555,36 @@ pub async fn we_chat_connect(
     Ok(response)
 }
 
+#[derive(Debug, Deserialize)]
+pub struct WsParams {
+    token: String,
+}
+
+pub async fn wsocket_chat_connect(
+    req: HttpRequest,
+    stream: web::Payload,
+    data: web::Data<UserConnections>,
+    query_params: web::Query<WsParams>,
+    pool:Data<PgPool>,
+) -> Result<HttpResponse, Error> {
+
+
+    let claims = authenticate_websocket_token(&query_params.token)
+        .await
+        .map_err(|response| actix_web::error::ErrorUnauthorized(response))?;
+
+
+    let (response,session, mut msg_stream) = handle(&req, stream)?;
+    actix_web::rt::spawn(async move {
+        chat_ws_service(session,  msg_stream, claims.user_name.to_owned(), data, &pool).await;
+    });
+
+    Ok(response)
+}
+
+
+async fn authenticate_websocket_token(token: &str) -> Result<Claims, actix_web::Error> {
+    decode_token(token.to_string())
+        .map_err(|_| actix_web::error::ErrorUnauthorized("Invalid or expired token"))
+}
 

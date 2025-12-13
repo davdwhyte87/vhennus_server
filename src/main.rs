@@ -8,7 +8,7 @@ use actix_web::error::JsonPayloadError;
 use actix_web::{get, http, web, App, Error, HttpRequest, HttpResponse, HttpServer, Responder, ResponseError};
 use actix_web::web::{resource, route, service, Data, JsonConfig, ServiceConfig};
 use awc::Client;
-
+use actix_web::middleware::Logger;
 mod controllers;
 use controllers::buy_order_controller::seller_confirmed;
 // use controllers::trivia_game_controller::{self, get_todays_game};
@@ -34,8 +34,8 @@ use sqlx::postgres::PgPoolOptions;
 use services::chat_session_service::UserConnections;
 use services::{chat_session_service, user_service};
 use crate::controllers::download_controller::download_apk;
-use crate::controllers::jobs_controller;
-
+use crate::controllers::{group_controller, jobs_controller};
+use crate::groups::models::{RoomMembers, UserRoomSessions};
 use crate::models::user::User;
 use crate::services::daily_post_job_service::{ get_exchange_rate_job, start_jobs};
 use crate::services::jobs_service::AppScheduler;
@@ -43,7 +43,9 @@ use crate::services::mongo_service::MongoService;
 mod utils;
 mod req_models;
 mod middlewares;
-
+mod groups;
+mod shared;
+use actix_web::{ options};
 
 
 #[get("/hello")]
@@ -116,7 +118,7 @@ async fn main() -> std::io::Result<()> {
 
     dotenv().ok();
 
-    env::set_var("RUST_BACKTRACE", "full");
+    //env::set_var("RUST_BACKTRACE", "full");
     let config = &*CONFIG;
 
     let port: u16 = CONFIG.port.to_owned().parse().ok()  // Option<u16>
@@ -124,29 +126,41 @@ async fn main() -> std::io::Result<()> {
     let address = ("0.0.0.0", port);
     info!("Starting server on {:?}", address);
     debug!("Starting server on {:?}", address);
+    debug!("App env {:?}", CONFIG.app_env);
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
+    let room_members: RoomMembers = Arc::new(DashMap::new());
+    let user_room_sessions: UserRoomSessions = Arc::new(DashMap::new());
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
-    
+
     // start daily post job
     //start_jobs(pool.clone()).await;
-    
-    if(CONFIG.app_env == "test" ||CONFIG.app_env ==  "local"){
+
+
+
+    if(config.app_env == "test" ||config.app_env ==  "local"){
         HttpServer::new(move|| {
             let cors = Cors::default()
-                // Allow any origin; or .allowed_origin("https://your-frontend.com")
-                .allow_any_origin()
-                // Allow the methods your clients will use
-                .allowed_methods(["GET", "POST", "OPTIONS"])
-                // Allow the headers your clients send
-                .allowed_headers([http::header::CONTENT_TYPE])
-                // Cache preflight response for 1 hour
+                .allowed_origin("http://localhost:5173")
+                .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+                .allowed_headers(vec![
+                    http::header::AUTHORIZATION,
+                    http::header::ACCEPT,
+                    http::header::CONTENT_TYPE,
+                    http::header::HeaderName::from_static("x-requested-with"),
+                ])
+                .supports_credentials()
                 .max_age(3600);
+
             App::new()
+                .wrap(Logger::default()) // This will log all requests
+                .wrap(cors)
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
-                .wrap(cors)// pass data to routes if needed
+                .app_data(web::Data::new(room_members.clone()))
+                .app_data(web::Data::new(user_room_sessions.clone()))
+                
                 .configure(configure_services)
         })
             .bind(address)?
@@ -168,7 +182,9 @@ async fn main() -> std::io::Result<()> {
             App::new()
                 .wrap(cors_prod)
                 .app_data(Data::new(pool.clone()))
-                .app_data(web::Data::new(user_connections.clone())) // pass data to routes if needed
+                .app_data(web::Data::new(user_connections.clone()))
+                .app_data(web::Data::new(room_members.clone()))
+                .app_data(Data::new(user_room_sessions.clone()))
                 .configure(configure_services)
         })
             .bind(address)?
@@ -179,10 +195,19 @@ async fn main() -> std::io::Result<()> {
 }
 
 
+#[options("/api/v1/auth/{tail:.*}")]
+async fn options_handler() -> HttpResponse {
+    HttpResponse::Ok()
+        .append_header(("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"))
+        .append_header(("Access-Control-Allow-Headers", "Content-Type, Authorization, x-requested-with"))
+        .append_header(("Access-Control-Max-Age", "3600"))
+        .finish()
+}
 
 fn configure_services(cfg: &mut ServiceConfig) {
-    cfg
 
+    cfg
+        .service(options_handler)
         .service(
             web::scope("api/v1/auth")
                 .service(user_controller::say_hello)
@@ -221,9 +246,25 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(user_controller::delete_profile)
                 )
                 .service(
+                    web::scope("group")
+                        .service(groups::controller::create_group)
+                        .service(groups::controller::create_room)
+                        .service(groups::controller::join_room)
+                        .service(groups::controller::join_room_with_code)
+                        .service(groups::controller::generate_room_code)
+                        .service(groups::controller::update_group)
+                        .service(groups::controller::update_room)
+                        .service(groups::controller::leave_room)
+                        .service(groups::controller::get_my_groups)
+                        .service(groups::controller::get_group)
+                        .service(groups::controller::get_room)
+                        .route("/ws_group", web::get().to(groups::controller::connect_to_rooms))
+                )
+                .service(
                     web::scope("chat")
                         .service(chats_controller::create_chat)
                         .service(chats_controller::get_by_pair)
+                        .service(chats_controller::get_chats)
                         .service(chats_controller::get_my_chat_pairs)
                         .service(chats_controller::find_chat_pair)
                         .route("/ws", web::get().to(chats_controller::we_chat_connect)),
@@ -232,6 +273,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
         )
         .service(index)
         .route("/ws", web::get().to(chat_session_service::ws_chat))
+        .route("/chat/ws", web::get().to(chats_controller::wsocket_chat_connect) )
         .service(user_controller::create_account)
         .service(user_controller::login)
         .service(user_controller::confirm_account)
@@ -275,6 +317,7 @@ pub static CONFIG: Lazy<Config> = Lazy::new(|| {
     // Log environment variables
     dotenv().ok();
     error!("PORT: {:?}", env::var("PORT"));
+    error!("App Env: {:?}", env::var("APP_ENV"));
     let port = match env::var("PORT"){
         Ok(data)=>{
             data

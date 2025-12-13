@@ -28,7 +28,6 @@ mongodb = "3.0.1"
 r2d2-mongodb = "*"
 rand = "0.8.5"
 regex = "1.7.1"
-serde = "1.0.152"
 serde_derive = "1.0.152"
 serde_json = "1.0.91"
 strum = "0.26.3"
@@ -39,7 +38,13 @@ validator = {version ="0.18.1", features = ["derive"] }
 google-authenticator = "0.4.2"
 gcp_auth = "0.12.3"
 awc = { version = "3.5.1", features = ["rustls"] }
-sqlx = { version = "0.8.3", features = ["postgres", "runtime-tokio", "tls-native-tls","migrate","chrono", "bigdecimal"] }
+sqlx = { version = "0.8.6", features = [  "postgres",
+    "runtime-tokio",
+    "tls-native-tls",
+    "migrate",
+    "chrono",
+    "bigdecimal",
+    "macros"   ] }
 actix-files = "0.6.6"
 rustls-pemfile = "1.0.4"
 rustls = "0.20.9"
@@ -58,3 +63,4 @@ http = "0.2.12"
 url = "2.5.4"
 mime = "0.3.17"
 base64 = "0.22.1"
+serde = "1.0.228"

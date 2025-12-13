@@ -1,0 +1,11 @@
+# Rust build artifacts
+target/
+
+# Dependency caches
+.cargo/
+
+# IDE and system files
+.git
+.gitignore
+.vscode/
+*.swp

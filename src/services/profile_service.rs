@@ -56,6 +56,8 @@ impl ProfileService {
                 return Err(Box::new(err));
             }
         };
+        
+        
         let friends = sqlx::query_as!(MiniProfile,
         "SELECT p.user_name, p.image, p.bio, p.name FROM profiles p
          JOIN friends f ON p.user_name = f.friend_username OR p.user_name = f.user_username
@@ -71,7 +73,6 @@ impl ProfileService {
         pool: &PgPool,
         profile:Profile
     ) -> Result<MiniProfile, Box<dyn Error>> {
-        
         let updated_profile = sqlx::query_as!(
         MiniProfile,
         "UPDATE profiles
