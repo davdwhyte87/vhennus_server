@@ -4,7 +4,7 @@ use actix_web::http::Method;
 use actix_web::{dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform}, Error, HttpMessage};
 use actix_web::error::ErrorUnauthorized;
 use futures_util::future::LocalBoxFuture;
-use crate::utils::auth::decode_token;
+use crate::shared::auth::decode_token;
 
 pub struct AuthM;
 

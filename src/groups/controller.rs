@@ -5,15 +5,14 @@ use actix_ws::handle;
 use log::{debug, error};
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::groups::models::{Group, MyGroupsView, Room, RoomMembers, RoomWithMembersView, UserRoomSessions};
+use crate::groups::models::{CreateGroupReq, CreateRoomReq, UpdateGroupReq, UpdateRoomReq, Group, MyGroupsView, Room, RoomMembers, RoomWithMembersView, UserRoomSessions};
 use crate::groups::service::GroupService;
-use crate::models::app_error::AppError;
-use crate::models::response::GenericResp;
-use crate::req_models::requests::{CreateGroupReq, CreateRoomReq, UpdateGroupReq, UpdateRoomReq};
-use crate::services::chat_session_service::{chat_ws_service, UserConnections};
-use crate::services::profile_service::MiniProfile;
-use crate::utils::auth::Claims;
-use crate::utils::general::get_time_naive;
+use crate::shared::error::AppError;
+use crate::shared::response::GenericResp;
+use crate::chat::service::{chat_ws_service, UserConnections};
+use crate::profile::models::MiniProfile;
+use crate::shared::auth::Claims;
+use crate::shared::general::get_time_naive;
 
 #[post("/create_group")]
 pub async fn create_group(

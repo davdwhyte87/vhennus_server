@@ -10,19 +10,19 @@ use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
 use sqlx::PgPool;
 use uuid::Uuid;
-use crate::groups::models::{Group, MessageType, MyGroupsView, Room, RoomChatReq, RoomMembers, RoomMessage, RoomWithMembersView, UserRoom, UserRoomSessions};
+use crate::groups::models::{CreateGroupReq, CreateRoomReq, UpdateGroupReq, UpdateRoomReq, Group, MessageType, MyGroupsView, Room, RoomChatReq, RoomMembers, RoomMessage, RoomWithMembersView, UserRoom, UserRoomSessions};
+use crate::profile::models::UpdateProfileReq;
 use crate::groups::repository::GroupRepo;
-use crate::models::app_error::AppError;
-use crate::models::chat::Chat;
-use crate::models::request_models::CreateChatReq;
-use crate::req_models::requests::{CreateGroupReq, CreateRoomReq, UpdateGroupReq, UpdateProfileReq, UpdateRoomReq};
-use crate::services::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
-use crate::services::chat_service::ChatService;
-use crate::services::chat_session_service::UserConnections;
-use crate::services::profile_service::ProfileService;
-use crate::utils::auth::Claims;
-use crate::utils::general::get_time_naive;
-use crate::utils::strings_stuff::truncate_string;
+use crate::shared::error::AppError;
+use crate::chat::models::Chat;
+use crate::chat::models::CreateChatReq;
+use crate::shared::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
+use crate::chat::service::ChatService;
+use crate::chat::service::UserConnections;
+use crate::profile::service::ProfileService;
+use crate::shared::auth::Claims;
+use crate::shared::general::get_time_naive;
+use crate::shared::strings::truncate_string;
 
 pub struct GroupService{
 

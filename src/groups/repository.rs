@@ -4,9 +4,9 @@ use log::{debug, error};
 use sqlx::{query_as, PgPool, Postgres, Transaction};
 use uuid::Uuid;
 use crate::groups::models::{Group, MyGroupsView, Room, RoomMessage, RoomView, RoomWithMembersView, UserRoom};
-use crate::models::app_error::AppError;
-use crate::services::profile_service::MiniProfile;
-use crate::utils::general::get_time_naive;
+use crate::shared::error::AppError;
+use crate::profile::models::MiniProfile;
+use crate::shared::general::get_time_naive;
 
 
 

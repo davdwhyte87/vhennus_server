@@ -27,7 +27,7 @@ CREATE  TABLE room_messages(
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE rooms ADD COLUMN created_by VARCHAR NOT NULL default "";
+ALTER TABLE rooms ADD COLUMN created_by VARCHAR NOT NULL default '';
 ALTER TABLE rooms ADD COLUMN code VARCHAR;
 
 ALTER TABLE rooms

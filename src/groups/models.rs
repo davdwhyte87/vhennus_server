@@ -4,7 +4,41 @@ use chrono::NaiveDateTime;
 use dashmap::DashMap;
 use once_cell::sync::Lazy;
 use serde_derive::{Deserialize, Serialize};
-use crate::services::profile_service::MiniProfile;
+use validator::Validate;
+use crate::profile::models::MiniProfile;
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct UpdateGroupReq{
+    pub group_id:String,
+    pub name:Option<String>,
+    pub description:Option<String>,
+    pub is_private:Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct UpdateRoomReq{
+    pub room_id:String,
+    pub name:Option<String>,
+    pub description:Option<String>,
+    pub is_private:Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct CreateGroupReq{
+    pub name:String,
+    pub description:Option<String>,
+    pub image:Option<String>,
+    pub is_private:bool,
+    pub category:Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct CreateRoomReq{
+    pub name:String,
+    pub group_id:String,
+    pub description:Option<String>,
+    pub is_private:bool,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default,)]
 pub struct Group {
