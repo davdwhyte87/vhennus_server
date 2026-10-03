@@ -18,14 +18,14 @@ if [ "$APP_ENV" = "test" ]; then
     PROJECT_DIR="/root/test_vhennus"
     SERVICE_NAME="test.vhennus.service"
     BRANCH="develop"
-    export DATABASE_URL="postgres://postgres:admin05501@127.0.0.1:5432/vhennus_test"
+    export DATABASE_URL="$DATABASE_URL"
 elif [ "$APP_ENV" = "prod" ]; then
     echo "Deploying to PRODUCTION environment..."
     # Production deployment commands
      PROJECT_DIR="/root/vhennus"
      SERVICE_NAME="vhennus.service"
      BRANCH="main"
-     export DATABASE_URL="postgres://postgres:admin05501@127.0.0.1:5432/vhennus"
+     export DATABASE_URL="$DATABASE_URL"
 else
     echo "Unknown environment. Check your .env file."
     exit 1
