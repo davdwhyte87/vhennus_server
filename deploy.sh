@@ -12,7 +12,6 @@ echo "======================================"
 
 PROJECT_DIR="/root/vhennus"
 BUILD_DIR="$PROJECT_DIR/build"
-
 ENV_FILE="$BUILD_DIR/.env"
 
 EXECUTABLE_NAME="vhennus_server"
@@ -20,7 +19,7 @@ SERVICE_NAME="vhennus.service"
 BRANCH="main"
 
 # --------------------------------------------------
-# Check project directory
+# Check directories
 # --------------------------------------------------
 
 if [ ! -d "$PROJECT_DIR" ]; then
@@ -32,35 +31,32 @@ fi
 mkdir -p "$BUILD_DIR"
 
 # --------------------------------------------------
-# Check .env
+# Load environment
 # --------------------------------------------------
 
+# The server .env is kept in build/
 if [ ! -f "$ENV_FILE" ]; then
     echo "ERROR: Environment file not found:"
     echo "$ENV_FILE"
     exit 1
 fi
 
-# Load environment variables for SQLx,
-# migrations, and the build.
 set -a
 source "$ENV_FILE"
 set +a
 
 if [ -z "$DATABASE_URL" ]; then
-    echo "ERROR: DATABASE_URL is not set in:"
-    echo "$ENV_FILE"
+    echo "ERROR: DATABASE_URL is not set."
     exit 1
 fi
 
 echo "Environment loaded successfully."
 
 # --------------------------------------------------
-# Load Rust / Cargo
+# Load Rust environment if necessary
 # --------------------------------------------------
 
 if ! command -v cargo >/dev/null 2>&1; then
-
     echo "Cargo not found. Loading Rust environment..."
 
     if [ -f "$HOME/.cargo/env" ]; then
@@ -69,7 +65,6 @@ if ! command -v cargo >/dev/null 2>&1; then
         echo "ERROR: Rust/Cargo is not installed."
         exit 1
     fi
-
 fi
 
 echo "Cargo: $(cargo --version)"
@@ -78,7 +73,6 @@ echo "Cargo: $(cargo --version)"
 # Check PostgreSQL
 # --------------------------------------------------
 
-echo ""
 echo "Checking PostgreSQL..."
 
 if ! pg_isready >/dev/null 2>&1; then
@@ -99,11 +93,9 @@ echo "Database connection successful."
 
 cd "$PROJECT_DIR"
 
-echo ""
 echo "Updating source code..."
 
 git fetch origin "$BRANCH"
-
 git reset --hard "origin/$BRANCH"
 
 echo "Source code updated."
@@ -112,50 +104,29 @@ echo "Source code updated."
 # Run database migrations
 # --------------------------------------------------
 
-echo ""
-echo "Running database migrations..."
-
-if ! command -v sqlx >/dev/null 2>&1; then
-    echo "ERROR: sqlx CLI is not installed."
-    echo "Install it with:"
-    echo ""
-    echo "cargo install sqlx-cli --no-default-features --features postgres"
-    exit 1
+if command -v sqlx >/dev/null 2>&1; then
+    echo "Running database migrations..."
+    sqlx migrate run
+    echo "Migrations complete."
+else
+    echo "WARNING: sqlx CLI is not installed."
+    echo "Skipping migrations."
 fi
-
-sqlx migrate run
-
-echo "Database migrations complete."
 
 # --------------------------------------------------
 # Build application
 # --------------------------------------------------
 
-echo ""
 echo "Building Rust application..."
 
 cargo build --release
 
-echo ""
 echo "Build successful."
-
-# --------------------------------------------------
-# Verify executable
-# --------------------------------------------------
-
-BUILD_BINARY="$PROJECT_DIR/target/release/$EXECUTABLE_NAME"
-
-if [ ! -f "$BUILD_BINARY" ]; then
-    echo "ERROR: Compiled executable not found:"
-    echo "$BUILD_BINARY"
-    exit 1
-fi
 
 # --------------------------------------------------
 # Stop service
 # --------------------------------------------------
 
-echo ""
 echo "Stopping $SERVICE_NAME..."
 
 sudo systemctl stop "$SERVICE_NAME" || true
@@ -164,34 +135,35 @@ sudo systemctl stop "$SERVICE_NAME" || true
 # Copy executable
 # --------------------------------------------------
 
-cp "$BUILD_BINARY" "$BUILD_DIR/$EXECUTABLE_NAME"
+if [ ! -f "$PROJECT_DIR/target/release/$EXECUTABLE_NAME" ]; then
+    echo "ERROR: Compiled executable not found:"
+    echo "$PROJECT_DIR/target/release/$EXECUTABLE_NAME"
+    exit 1
+fi
+
+cp \
+    "$PROJECT_DIR/target/release/$EXECUTABLE_NAME" \
+    "$BUILD_DIR/$EXECUTABLE_NAME"
 
 echo "Executable copied."
 
 # --------------------------------------------------
-# Verify .env
+# Restore .env into build/
 # --------------------------------------------------
 
+# IMPORTANT:
+# .env is server-only and must NOT come from GitHub.
+#
+# If your .env already exists in build/, it remains there.
+# This section simply verifies it exists.
+
 if [ ! -f "$BUILD_DIR/.env" ]; then
-    echo "ERROR: .env is missing from build directory."
+    echo "ERROR: $BUILD_DIR/.env disappeared."
+    echo "Deployment stopped to prevent starting without secrets."
     exit 1
 fi
 
 echo "Environment file verified."
-
-# --------------------------------------------------
-# Copy log4rs configuration
-# --------------------------------------------------
-
-if [ ! -f "$PROJECT_DIR/log4rs.yaml" ]; then
-    echo "ERROR: log4rs.yaml not found:"
-    echo "$PROJECT_DIR/log4rs.yaml"
-    exit 1
-fi
-
-cp "$PROJECT_DIR/log4rs.yaml" "$BUILD_DIR/log4rs.yaml"
-
-echo "Logging configuration copied."
 
 # --------------------------------------------------
 # Copy templates
@@ -205,23 +177,12 @@ if [ -d "$PROJECT_DIR/templates" ]; then
        "$BUILD_DIR/templates/" 2>/dev/null || true
 
     echo "Templates copied."
-
 fi
-
-# --------------------------------------------------
-# Show build directory
-# --------------------------------------------------
-
-echo ""
-echo "Build directory:"
-
-ls -la "$BUILD_DIR"
 
 # --------------------------------------------------
 # Start service
 # --------------------------------------------------
 
-echo ""
 echo "Starting $SERVICE_NAME..."
 
 sudo systemctl start "$SERVICE_NAME"
@@ -257,5 +218,4 @@ else
     sudo journalctl -u "$SERVICE_NAME" -n 50 --no-pager
 
     exit 1
-
 fi
