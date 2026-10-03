@@ -5,3 +5,4 @@
 service-account.json
 .env
 log4rs.yaml
+build/.env
