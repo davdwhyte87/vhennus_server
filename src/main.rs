@@ -105,7 +105,7 @@ async fn main() -> std::io::Result<()> {
     }else {
         HttpServer::new(move|| {
             let cors_prod =  Cors::default()
-                .allowed_origin("https://www.vhennus.com")
+                .allowed_origin("https://www.vhennus.org")
                 .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
                 .allowed_headers(vec![
                     http::header::AUTHORIZATION,
