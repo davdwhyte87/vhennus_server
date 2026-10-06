@@ -86,7 +86,7 @@ impl EmailService {
         html_body: &str,
     ) -> Result<(), reqwest::Error> {
         let auth_token = self.get_access_token().await?;
-        let from_email = "team@vhennus.com";
+        let from_email = "team@vhennus.org";
         let from_name = "Vhennus";
 
         let email_request = SendEmailRequest {
