@@ -199,6 +199,38 @@ impl FriendRequestRepo {
         Ok(fr)
     }
 
+    pub async fn get_friend_request_between(pool:&PgPool, user_a:String, user_b:String)->Result<Vec<FriendRequest>, ServiceError>{
+        let rows = sqlx::query_as!(FriendRequest, "
+            SELECT *
+            FROM friend_requests
+            WHERE (requester = $1 AND user_name = $2) OR (requester = $2 AND user_name = $1)
+            " , user_a, user_b)
+            .fetch_all(pool).await?;
+        Ok(rows)
+    }
+
+    pub async fn are_friends(pool:&PgPool, user_a:String, user_b:String)->Result<bool, ServiceError>{
+        let exists = sqlx::query_scalar!(
+            "SELECT EXISTS(
+                SELECT 1 FROM friends
+                WHERE (user_username = $1 AND friend_username = $2)
+                   OR (user_username = $2 AND friend_username = $1)
+            )",
+            user_a, user_b
+        )
+        .fetch_one(pool).await?;
+        Ok(exists.unwrap_or(false))
+    }
+
+    pub async fn reset_request_to_pending(pool:&PgPool, frid:String)->Result<(), ServiceError>{
+        sqlx::query!(
+            "UPDATE friend_requests SET status = 'PENDING', updated_at = NOW() WHERE id = $1",
+            frid
+        )
+        .execute(pool).await?;
+        Ok(())
+    }
+
     pub async fn insert_friend_request(pool:&PgPool, request:FriendRequest)->Result<(), ServiceError>{
         let res = sqlx::query_as!(FriendRequest, "
           INSERT INTO friend_requests (id,user_name,requester, status, created_at, updated_at)
@@ -209,10 +241,14 @@ impl FriendRequestRepo {
     }
 
     pub async fn delete_friend_request(pool:&PgPool, frid:String, owner_username:String)->Result<(),Box<dyn Error>>{
-        let res = sqlx::query_as!(FriendRequest, 
-            "DELETE FROM friend_requests  WHERE id = $1 AND user_name = $2",
+        let res = sqlx::query!(
+            "UPDATE friend_requests SET status = 'REJECTED', updated_at = NOW()
+             WHERE id = $1 AND user_name = $2 AND status = 'PENDING'",
             frid, owner_username
         ).execute(pool).await?;
+        if res.rows_affected() == 0 {
+            return Err("Friend request not found or already decided".into());
+        }
         return Ok(())
     }
 
@@ -220,6 +256,14 @@ impl FriendRequestRepo {
         let mut tx: Transaction<'_, Postgres> = pool.begin().await?;
         // get friend request 
         let fr = Self::get_single_friend_request(pool, request_id.clone()).await?;
+        if fr.user_name != owner_user_name {
+            let _ = tx.rollback().await;
+            return Err("You cannot accept someone else's friend request".into());
+        }
+        if fr.status != "PENDING" {
+            let _ = tx.rollback().await;
+            return Err("This friend request has already been decided".into());
+        }
         
         // update friend request 
         let res = sqlx::query_as!(FriendRequest, 
@@ -229,7 +273,7 @@ impl FriendRequestRepo {
      
         if res.rows_affected() == 0 {
             tx.rollback().await?;
-            return  return Err("Failed to update friend request".into());
+            return Err("Failed to update friend request".into());
         }
         
         let friend = Friend{
@@ -248,5 +292,25 @@ impl FriendRequestRepo {
         }
         tx.commit().await?;
         return Ok(fr)
+    }
+
+    pub async fn unfriend(pool:&PgPool, user_a:String, user_b:String)->Result<(),Box<dyn Error>> {
+        let mut tx: Transaction<'_, Postgres> = pool.begin().await?;
+        sqlx::query!(
+            "DELETE FROM friends
+             WHERE (user_username = $1 AND friend_username = $2)
+                OR (user_username = $2 AND friend_username = $1)",
+            user_a, user_b
+        )
+        .execute(&mut *tx).await?;
+        sqlx::query!(
+            "DELETE FROM friend_requests
+             WHERE (requester = $1 AND user_name = $2)
+                OR (requester = $2 AND user_name = $1)",
+            user_a, user_b
+        )
+        .execute(&mut *tx).await?;
+        tx.commit().await?;
+        return Ok(())
     }
 }

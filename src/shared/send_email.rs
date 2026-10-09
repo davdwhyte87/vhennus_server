@@ -272,6 +272,36 @@ impl EmailService {
         }
     }
 
+    pub async  fn send_membership_approved_email(&self, reciever_email:String, user_name:String)->Result<(), AppError>{
+
+        let template_path = "templates/membership_approved_email.hbs";
+        let template_content = fs::read_to_string(template_path)
+            .expect("Failed to read email template file");
+        #[derive(Serialize)]
+        struct EmailContext {
+            user_name: String,
+        }
+        let context = EmailContext {
+            user_name: user_name.clone(),
+        };
+
+        let mut handlebars = Handlebars::new();
+        handlebars
+            .register_template_string("email_template", &template_content)
+            .expect("Failed to register template");
+        let rendered_body = handlebars
+            .render("email_template", &context)
+            .expect("Failed to render template");
+
+        match Self::send_email(&self, &reciever_email,"Welcome to the Civilization — Vhennus Membership Approved", &rendered_body).await{
+            Ok(_) => Ok(()),
+            Err(err) => {
+                error!("{}", err);
+                Err(AppError::SendMailError)
+            }
+        }
+    }
+
     pub async  fn send_ref_reminder_email(&self, reciever_email:String)->Result<(), AppError>{
         let template_path = "templates/ref_reminder.hbs";
         let template_content = fs::read_to_string(template_path)

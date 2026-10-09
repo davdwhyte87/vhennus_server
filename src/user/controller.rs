@@ -560,10 +560,18 @@ pub async fn login(pool:Data<PgPool>, req:Json<LoginReq>)->HttpResponse{
         .json(resp_data) 
     }
 
-    // make token
+    // make token (include membership status from profiles table)
+
+    let membership = match ProfileService::get_profile(&pool, user.user_name.clone()).await {
+        Ok(profile) => profile.membership,
+        Err(err) => {
+            log::error!("could not fetch profile membership for token: {}", err);
+            false
+        }
+    };
 
     let login_token =encode_token(
-        user.user_type,"".to_string(),user.user_name);
+        user.user_type,"".to_string(),user.user_name, membership);
     let login_token = match login_token {
         Ok(login_token)=>{login_token},
         Err(err)=>{
@@ -1139,7 +1147,25 @@ pub async fn send_friend_request(
             respData.message = "Friend request already sent!".to_string();
             respData.server_message = None;
             respData.data = None;
-            return HttpResponse::InternalServerError().json(respData);
+            return HttpResponse::BadRequest().json(respData);
+        }
+        Err(ServiceError::AlreadyFriends)=>{
+            respData.message = "You are already friends!".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);
+        }
+        Err(ServiceError::InvalidInput(msg))=>{
+            respData.message = msg;
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);
+        }
+        Err(ServiceError::UserNotFound)=>{
+            respData.message = "User not found".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::NotFound().json(respData);
         }
         Err(ServiceError::DatabaseError(err))=>{
             respData.message = "Error creating friend request".to_string();
@@ -1193,7 +1219,7 @@ pub async fn send_friend_request(
 
 #[derive(Debug, Deserialize)]
 struct GenID{id:String} 
-#[get("/friend_request/accept/{id}")]
+#[post("/friend_request/accept/{id}")]
 pub async fn accept_friend_request(
     pool:Data<PgPool>,
     path: web::Path<GenID>,
@@ -1267,7 +1293,7 @@ pub async fn accept_friend_request(
 
 
 
-#[get("/friend_request/reject/{id}")]
+#[post("/friend_request/reject/{id}")]
 pub async fn reject_friend_request(
     pool:Data<PgPool>,
     path: web::Path<GenID>,
@@ -1307,6 +1333,51 @@ pub async fn reject_friend_request(
     respData.data = None;
     return HttpResponse::Ok().json(respData);
 
+}
+
+
+#[post("/friend_request/unfriend")]
+pub async fn unfriend(
+    pool:Data<PgPool>,
+    req: Result<web::Json<SendFriendReq>, actix_web::Error>,
+    claim:Option<ReqData<Claims>>
+)->HttpResponse{
+    let mut respData = GenericResp::<String>{
+        message:"".to_string(),
+        server_message: None,
+        data: None
+    };
+    let req = match req {
+        Ok(data)=>{data},
+        Err(err)=>{
+            respData.message = "Validation error".to_string();
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData);
+        }
+    };
+    let claim = match claim {
+        Some(claim)=>{claim},
+        None=>{
+            respData.message = "Unauthorized".to_string();
+            return HttpResponse::Unauthorized().json(respData)
+        }
+    };
+    if req.user_name == claim.user_name {
+        respData.message = "Invalid request".to_string();
+        return HttpResponse::BadRequest().json(respData);
+    }
+    match FriendRequestService::unfriend(&pool, claim.user_name.clone(), req.user_name.clone()).await{
+        Ok(_)=>{
+            respData.message = "Ok".to_string();
+            return HttpResponse::Ok().json(respData);
+        },
+        Err(err)=>{
+            log::error!("error unfriending {}", err);
+            respData.message = "Error removing friend".to_string();
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
 }
 
 

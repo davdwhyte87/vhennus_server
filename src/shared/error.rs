@@ -10,6 +10,9 @@ pub enum ServiceError {
 
     #[error("Friend request already exists")]
     FriendRequestExists,
+
+    #[error("You are already friends")]
+    AlreadyFriends,
     
     #[error("Could not update data")]
     NoUpdatedRow,

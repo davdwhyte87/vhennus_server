@@ -1,5 +1,5 @@
 use bigdecimal::BigDecimal;
-use chrono::NaiveDateTime;
+use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -17,7 +17,13 @@ pub struct Profile {
     pub unclaimed_earnings:BigDecimal,
     pub is_earnings_activated:bool,
     pub referred_users: Vec<String>,
-    pub earnings_wallet: Option<String>
+    pub earnings_wallet: Option<String>,
+    pub membership: bool,
+    pub phone_number: Option<String>,
+    pub country_of_origin: Option<String>,
+    pub state_of_origin: Option<String>,
+    pub date_of_birth: Option<NaiveDate>,
+    pub current_country: Option<String>
 }
 
 
@@ -44,6 +50,11 @@ pub struct UpdateProfileReq{
     pub new_earning:Option<String>,
     pub new_referrals:Option<Vec<String>>,
     pub earnings_wallet:Option<String>,
+    pub phone_number:Option<String>,
+    pub country_of_origin:Option<String>,
+    pub state_of_origin:Option<String>,
+    pub date_of_birth:Option<NaiveDate>,
+    pub current_country:Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]

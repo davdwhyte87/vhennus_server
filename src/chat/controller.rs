@@ -11,8 +11,9 @@ use sqlx::PgPool;
 
 use crate::chat::models::{
     Chat, ChatPair, Circle, CreateChatReq, CreateGroupChatReq, GetChatsView, ChatPairView,
+    MarkReadReq, UnreadResp,
 };
-use crate::chat::service::{chat_ws_service, ChatPairService, ChatService, UserConnections};
+use crate::chat::service::{chat_ws_service, ChatPairService, ChatService, ChatSessions};
 use crate::shared::auth::{decode_token, Claims};
 use crate::shared::general::get_current_time_stamp;
 use crate::shared::response::GenericResp;
@@ -70,16 +71,20 @@ pub async fn create_chat(
     }
 
     match ChatService::create_chat(&pool, chat).await {
-        Ok(_) => {}
+        Ok(created) => {
+            respData.data = Some(created);
+            respData.message = "ok".to_string();
+            respData.server_message = None;
+            return HttpResponse::Ok().json(respData);
+        }
         Err(err) => {
-            log::error!("{}", err)
+            log::error!("error creating chat: {}", err);
+            respData.message = "Error sending message".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::BadRequest().json(respData);
         }
     };
-
-    respData.data = None;
-    respData.message = "ok".to_string();
-    respData.server_message = None;
-    return HttpResponse::Ok().json(respData);
 }
 
 #[derive(Deserialize)]
@@ -104,6 +109,31 @@ pub async fn get_by_pair(
         data: None,
     };
 
+    let claim = match claim {
+        Some(claim) => claim,
+        None => {
+            respData.message = "Unauthorized".to_string();
+            return HttpResponse::Unauthorized().json(respData);
+        }
+    };
+
+    // only members of the pair may read its chats
+    let pair = match ChatPairService::find_pair_by_id(&pool, path.id.clone()).await {
+        Ok(data) => data,
+        Err(_) => {
+            respData.message = "Chat not found".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::NotFound().json(respData);
+        }
+    };
+    if pair.user1 != claim.user_name && pair.user2 != claim.user_name {
+        respData.message = "You are not a member of this chat".to_string();
+        respData.server_message = None;
+        respData.data = None;
+        return HttpResponse::Forbidden().json(respData);
+    }
+
     let chats = match ChatService::get_chats_by_pair_id(&pool, path.id.clone()).await {
         Ok(data) => data,
         Err(err) => {
@@ -119,6 +149,72 @@ pub async fn get_by_pair(
     respData.server_message = None;
     respData.data = Some(chats);
     return HttpResponse::Ok().json(respData);
+}
+
+#[get("/unread")]
+pub async fn get_unread(
+    pool: Data<PgPool>,
+    claim: Option<ReqData<Claims>>,
+) -> HttpResponse {
+    let mut respData = GenericResp::<UnreadResp> {
+        message: "".to_string(),
+        server_message: Some("".to_string()),
+        data: None,
+    };
+    let claim = match claim {
+        Some(claim) => claim,
+        None => {
+            respData.message = "Unauthorized".to_string();
+            return HttpResponse::Unauthorized().json(respData);
+        }
+    };
+    match ChatPairService::get_unread(&pool, claim.user_name.clone()).await {
+        Ok(data) => {
+            respData.message = "ok".to_string();
+            respData.server_message = None;
+            respData.data = Some(data);
+            return HttpResponse::Ok().json(respData);
+        }
+        Err(err) => {
+            log::error!("error getting unread chats {}", err);
+            respData.message = "Error getting unread chats".to_string();
+            respData.server_message = Some(err.to_string());
+            respData.data = None;
+            return HttpResponse::InternalServerError().json(respData);
+        }
+    };
+}
+
+#[post("/mark_read")]
+pub async fn mark_read(
+    pool: Data<PgPool>,
+    req: web::Json<MarkReadReq>,
+    claim: Option<ReqData<Claims>>,
+) -> HttpResponse {
+    let mut respData = GenericResp::<String> {
+        message: "".to_string(),
+        server_message: None,
+        data: None,
+    };
+    let claim = match claim {
+        Some(claim) => claim,
+        None => {
+            respData.message = "Unauthorized".to_string();
+            return HttpResponse::Unauthorized().json(respData);
+        }
+    };
+    match ChatPairService::mark_read(&pool, claim.user_name.clone(), req.pair_id.clone()).await {
+        Ok(_) => {
+            respData.message = "ok".to_string();
+            return HttpResponse::Ok().json(respData);
+        }
+        Err(err) => {
+            log::error!("error marking chat read {}", err);
+            respData.message = "Error marking chat as read".to_string();
+            respData.server_message = Some(err.to_string());
+            return HttpResponse::BadRequest().json(respData);
+        }
+    };
 }
 
 #[derive(Deserialize)]
@@ -138,10 +234,20 @@ pub async fn get_chats(
         data: None,
     };
 
+    let claim = match claim {
+        Some(claim) => claim,
+        None => {
+            respData.message = "Unauthorized".to_string();
+            respData.server_message = None;
+            respData.data = None;
+            return HttpResponse::Unauthorized().json(respData);
+        }
+    };
+
     let chat_pair = match ChatPairService::find_chat_pair(
         &pool,
         path.user_name.clone(),
-        claim.unwrap().user_name.clone(),
+        claim.user_name.clone(),
     )
     .await
     {
@@ -526,28 +632,6 @@ pub async fn get_my_chat_pairs(
 // }
 
 // connect chat with websocket
-pub async fn we_chat_connect(
-    req: HttpRequest,
-    stream: web::Payload,
-    data: web::Data<UserConnections>,
-    claim: Option<ReqData<Claims>>,
-    pool: Data<PgPool>,
-) -> Result<HttpResponse, Error> {
-    let claim = match claim {
-        Some(claim) => claim,
-        None => {
-            return Ok(HttpResponse::Unauthorized().json({}));
-        }
-    };
-
-    let (response, session, mut msg_stream) = handle(&req, stream)?;
-    actix_web::rt::spawn(async move {
-        chat_ws_service(session, msg_stream, claim.user_name.to_owned(), data, &pool).await;
-    });
-
-    Ok(response)
-}
-
 #[derive(Debug, Deserialize)]
 pub struct WsParams {
     token: String,
@@ -556,7 +640,7 @@ pub struct WsParams {
 pub async fn wsocket_chat_connect(
     req: HttpRequest,
     stream: web::Payload,
-    data: web::Data<UserConnections>,
+    data: web::Data<ChatSessions>,
     query_params: web::Query<WsParams>,
     pool: Data<PgPool>,
 ) -> Result<HttpResponse, Error> {

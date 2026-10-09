@@ -10,12 +10,14 @@ pub struct Claims{
     pub role:String,
     pub email: String,
     pub user_name:String,
+    #[serde(default)]
+    pub membership: bool,
     pub exp:usize
 }
 
 
 
-pub fn encode_token(role: String, email:String, name:String) ->Result<String, Box<dyn Error>>{
+pub fn encode_token(role: String, email:String, name:String, membership: bool) ->Result<String, Box<dyn Error>>{
     let expiration = Utc::now()
         .checked_add_signed(chrono::Duration::days(365))
         .expect("valid timestamp")
@@ -24,6 +26,7 @@ pub fn encode_token(role: String, email:String, name:String) ->Result<String, Bo
         role:role,
         email:email,
         user_name:name,
+        membership,
         exp:expiration as usize
     };
     let token = encode(

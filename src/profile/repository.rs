@@ -60,10 +60,15 @@ impl ProfileRepo {
              image = COALESCE($4, image),
              app_f_token = COALESCE($5, app_f_token),
              wallets = COALESCE($6, wallets),
-             unclaimed_earnings = COALESCE($7, unclaimed_earnings),
-             is_earnings_activated = COALESCE($8, is_earnings_activated),
-             referred_users = $9,
-             earnings_wallet = COALESCE($10, earnings_wallet)
+              unclaimed_earnings = COALESCE($7, unclaimed_earnings),
+              is_earnings_activated = COALESCE($8, is_earnings_activated),
+               referred_users = $9,
+               earnings_wallet = COALESCE($10, earnings_wallet),
+               phone_number = COALESCE($11, phone_number),
+               country_of_origin = COALESCE($12, country_of_origin),
+               state_of_origin = COALESCE($13, state_of_origin),
+               date_of_birth = COALESCE($14, date_of_birth),
+               current_country = COALESCE($15, current_country)
 
          WHERE user_name = $1
          RETURNING user_name, name, bio, image",
@@ -76,7 +81,12 @@ impl ProfileRepo {
             profile.unclaimed_earnings,
             profile.is_earnings_activated,
             &profile.referred_users,
-            profile.earnings_wallet
+            profile.earnings_wallet,
+            profile.phone_number,
+            profile.country_of_origin,
+            profile.state_of_origin,
+            profile.date_of_birth,
+            profile.current_country
         )
             .fetch_one(pool)
             .await?;
@@ -148,5 +158,47 @@ impl ProfileRepo {
             }
         };
         return Ok(profiles);
+    }
+
+    pub async fn set_membership(pool:&PgPool, xuser_name:String, is_member:bool)->Result<(), Box<dyn Error>>{
+        sqlx::query!(
+            "UPDATE profiles SET membership = $2, updated_at = NOW() WHERE user_name = $1",
+            xuser_name, is_member)
+            .execute(pool)
+            .await?;
+        return Ok(());
+    }
+
+    pub async fn set_phone_number(pool:&PgPool, xuser_name:String, phone:String)->Result<(), Box<dyn Error>>{
+        sqlx::query!(
+            "UPDATE profiles SET phone_number = $2, updated_at = NOW() WHERE user_name = $1",
+            xuser_name, phone)
+            .execute(pool)
+            .await?;
+        return Ok(());
+    }
+
+    pub async fn update_contact_info(
+        pool:&PgPool,
+        xuser_name:String,
+        phone:Option<String>,
+        country_of_origin:Option<String>,
+        state_of_origin:Option<String>,
+        date_of_birth:Option<chrono::NaiveDate>,
+        current_country:Option<String>,
+    )->Result<(), Box<dyn Error>>{
+        sqlx::query!(
+            "UPDATE profiles
+             SET phone_number = COALESCE($2, phone_number),
+                 country_of_origin = COALESCE($3, country_of_origin),
+                 state_of_origin = COALESCE($4, state_of_origin),
+                 date_of_birth = COALESCE($5, date_of_birth),
+                 current_country = COALESCE($6, current_country),
+                 updated_at = NOW()
+             WHERE user_name = $1",
+            xuser_name, phone, country_of_origin, state_of_origin, date_of_birth, current_country)
+            .execute(pool)
+            .await?;
+        return Ok(());
     }
 }

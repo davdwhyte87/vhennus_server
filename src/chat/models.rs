@@ -75,10 +75,33 @@ pub struct CreateChatPairReq {
     pub user_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Validate)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, sqlx::FromRow)]
 pub struct CreateGroupChatReq {
     pub name: String,
     pub display_name: String,
     pub members: Vec<String>,
     pub image: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
+pub struct UnreadRow {
+    pub pair_id: String,
+    pub unread: Option<i64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PairUnread {
+    pub pair_id: String,
+    pub unread: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UnreadResp {
+    pub total: i64,
+    pub pairs: Vec<PairUnread>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MarkReadReq {
+    pub pair_id: String,
 }

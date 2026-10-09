@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use actix_cors::Cors;
 use actix_web::middleware::Logger;
@@ -14,6 +15,7 @@ mod chat;
 mod feed;
 mod groups;
 mod jobs;
+mod membership;
 mod middlewares;
 mod orders;
 mod profile;
@@ -24,6 +26,7 @@ mod user;
 mod wallet;
 
 use crate::chat::service::UserConnections;
+use crate::chat::service::ChatSessions;
 use crate::groups::models::{RoomMembers, UserRoomSessions};
 use crate::shared::config::CONFIG;
 
@@ -65,6 +68,7 @@ async fn main() -> std::io::Result<()> {
     debug!("App env {:?}", CONFIG.app_env);
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
+    let chat_sessions: ChatSessions = Arc::new(Mutex::new(HashMap::new()));
     let room_members: RoomMembers = Arc::new(DashMap::new());
     let user_room_sessions: UserRoomSessions = Arc::new(DashMap::new());
     //let pool = init_db_pool();
@@ -94,6 +98,7 @@ async fn main() -> std::io::Result<()> {
                 .wrap(cors)
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
+                .app_data(web::Data::new(chat_sessions.clone()))
                 .app_data(web::Data::new(room_members.clone()))
                 .app_data(web::Data::new(user_room_sessions.clone()))
                 
@@ -119,6 +124,7 @@ async fn main() -> std::io::Result<()> {
                 .wrap(cors_prod)
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
+                .app_data(web::Data::new(chat_sessions.clone()))
                 .app_data(web::Data::new(room_members.clone()))
                 .app_data(Data::new(user_room_sessions.clone()))
                 .configure(configure_services)
@@ -177,6 +183,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
                     web::scope("user")
                         .service(user::controller::accept_friend_request)
                         .service(user::controller::reject_friend_request)
+                        .service(user::controller::unfriend)
                         .service(user::controller::send_friend_request)
                         .service(user::controller::get_my_friend_request)
                         .service(user::controller::delete_profile)
@@ -197,13 +204,36 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .route("/ws_group", web::get().to(groups::controller::connect_to_rooms))
                 )
                 .service(
+                    web::scope("membership")
+                        .service(membership::controller::get_questions)
+                        .service(membership::controller::create_application)
+                        .service(membership::controller::my_application)
+                        .service(membership::controller::membership_status)
+                        .service(membership::controller::submit_answers),
+                )
+                .service(
+                    web::scope("admin/membership")
+                        .service(membership::controller::list_applications)
+                        .service(membership::controller::get_application)
+                        .service(membership::controller::approve_application)
+                        .service(membership::controller::reject_application)
+                        .service(membership::controller::review_application)
+                        .service(membership::controller::admin_list_questions)
+                        .service(membership::controller::admin_create_question)
+                        .service(membership::controller::admin_update_question)
+                        .service(membership::controller::admin_delete_question)
+                        .service(membership::controller::admin_stats)
+                        .service(membership::controller::admin_list_users),
+                )
+                .service(
                     web::scope("chat")
                         .service(chat::controller::create_chat)
                         .service(chat::controller::get_by_pair)
                         .service(chat::controller::get_chats)
                         .service(chat::controller::get_my_chat_pairs)
                         .service(chat::controller::find_chat_pair)
-                        .route("/ws", web::get().to(chat::controller::we_chat_connect)),
+                        .service(chat::controller::get_unread)
+                        .service(chat::controller::mark_read)
                 )
             ,
         )

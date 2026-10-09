@@ -92,17 +92,48 @@ impl FriendRequestService {
     }
 
     pub async fn create_friend_request(pool:&PgPool, request:FriendRequest)->Result<(), ServiceError>{
-        // check if the user exists
+        if request.requester == request.user_name {
+            return Err(ServiceError::InvalidInput(
+                "You cannot send a friend request to yourself".to_string(),
+            ));
+        }
+        // check that both users exist
         ProfileService::user_exists(pool, &request.requester.clone())
             .await
             .map_err(|_| ServiceError::UserNotFound)?;
         ProfileService::user_exists(pool, &request.user_name.clone())
             .await
             .map_err(|_| ServiceError::UserNotFound)?;
-        //check if it exists 
-        let frr = Self::get_single_friend_request_by_users(pool, request.requester.clone(), request.user_name.clone()).await?;
-        if frr.is_some(){
-            return Err(ServiceError::FriendRequestExists);
+        // already friends (either direction) -> no request needed
+        if FriendRequestRepo::are_friends(
+            pool,
+            request.requester.clone(),
+            request.user_name.clone(),
+        )
+        .await?
+        {
+            return Err(ServiceError::AlreadyFriends);
+        }
+        // check both directions for existing requests
+        let existing = FriendRequestRepo::get_friend_request_between(
+            pool,
+            request.requester.clone(),
+            request.user_name.clone(),
+        )
+        .await?;
+        for row in &existing {
+            let same_direction =
+                row.requester == request.requester && row.user_name == request.user_name;
+            match row.status.as_str() {
+                "PENDING" => return Err(ServiceError::FriendRequestExists),
+                "ACCEPTED" => return Err(ServiceError::AlreadyFriends),
+                "REJECTED" if same_direction => {
+                    // Allow retry after a rejection: reopen the same request.
+                    FriendRequestRepo::reset_request_to_pending(pool, row.id.clone()).await?;
+                    return Ok(());
+                }
+                _ => {}
+            }
         }
         FriendRequestRepo::insert_friend_request(pool, request).await
     }
@@ -113,6 +144,14 @@ impl FriendRequestService {
 
     pub async fn accept_friend_request(pool:&PgPool, request_id:String, owner_user_name:String)->Result<FriendRequest,Box<dyn Error>> {
         FriendRequestRepo::accept_friend_request(pool, request_id, owner_user_name).await
+    }
+
+    pub async fn unfriend(pool:&PgPool, user_a:String, user_b:String)->Result<(),Box<dyn Error>> {
+        FriendRequestRepo::unfriend(pool, user_a, user_b).await
+    }
+
+    pub async fn are_friends(pool:&PgPool, user_a:String, user_b:String)->Result<bool, ServiceError> {
+        FriendRequestRepo::are_friends(pool, user_a, user_b).await
     }
 
 }

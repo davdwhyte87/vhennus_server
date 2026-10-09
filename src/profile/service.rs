@@ -49,4 +49,27 @@ impl ProfileService {
     pub async fn get_all(pool:&PgPool)->Result<Vec<Profile>, Box<dyn Error>>{
         ProfileRepo::get_all(pool).await
     }
+
+    pub async fn set_membership(pool:&PgPool, user_name:String, is_member:bool)->Result<(), Box<dyn Error>>{
+        ProfileRepo::set_membership(pool, user_name, is_member).await
+    }
+
+    pub async fn set_phone_number(pool:&PgPool, user_name:String, phone:String)->Result<(), Box<dyn Error>>{
+        ProfileRepo::set_phone_number(pool, user_name, phone).await
+    }
+
+    pub async fn update_contact_info(
+        pool:&PgPool,
+        user_name:String,
+        phone:Option<String>,
+        country_of_origin:Option<String>,
+        state_of_origin:Option<String>,
+        date_of_birth:Option<chrono::NaiveDate>,
+        current_country:Option<String>,
+    )->Result<(), Box<dyn Error>>{
+        ProfileRepo::update_contact_info(
+            pool, user_name, phone, country_of_origin, state_of_origin, date_of_birth,
+            current_country,
+        ).await
+    }
 }

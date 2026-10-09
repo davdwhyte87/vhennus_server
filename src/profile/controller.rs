@@ -259,6 +259,21 @@ pub async fn update_profile(
     if req.earnings_wallet.is_some(){
         profile.earnings_wallet = Some(req.earnings_wallet.clone().unwrap());
     }
+    if req.phone_number.is_some(){
+        profile.phone_number = Some(req.phone_number.clone().unwrap());
+    }
+    if req.country_of_origin.is_some(){
+        profile.country_of_origin = Some(req.country_of_origin.clone().unwrap());
+    }
+    if req.state_of_origin.is_some(){
+        profile.state_of_origin = Some(req.state_of_origin.clone().unwrap());
+    }
+    if req.date_of_birth.is_some(){
+        profile.date_of_birth = req.date_of_birth;
+    }
+    if req.current_country.is_some(){
+        profile.current_country = Some(req.current_country.clone().unwrap());
+    }
     
     // update 
     match ProfileService::update_profile(&pool, profile.clone()).await{

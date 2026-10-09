@@ -313,7 +313,7 @@ pub async fn get_single_posts(
     return HttpResponse::Ok().json(respData);
 }
 
-#[get("/like/{id}")]
+#[post("/like/{id}")]
 pub async fn like_post(
     pool: Data<PgPool>,
     claim: Option<ReqData<Claims>>,
