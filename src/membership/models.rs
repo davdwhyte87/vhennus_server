@@ -187,11 +187,22 @@ pub struct AdminStatsResp {
     pub total_members: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, sqlx::FromRow)]
+pub struct MembershipSettings {
+    pub applications_paused: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UpdateSettingsReq {
+    pub applications_paused: bool,
+}
+
 // ---------- Request bodies ----------
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MembershipStatusResp {
     pub is_member: bool,
+    pub applications_paused: bool,
     pub application: Option<MembershipApplication>,
 }
 

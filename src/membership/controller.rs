@@ -9,8 +9,8 @@ use sqlx::PgPool;
 use crate::membership::models::{
     AdminApplicationDetail, AdminQuestionView, AdminStatsResp, AdminUserRow,
     ApplicationWithContact, CreateApplicationReq, CreateQuestionReq, DecisionReq,
-    MembershipApplication, MembershipStatusResp, PublicQuestion, SubmitAnswersReq,
-    UpdateQuestionReq,
+    MembershipApplication, MembershipSettings, MembershipStatusResp, PublicQuestion,
+    SubmitAnswersReq, UpdateQuestionReq, UpdateSettingsReq,
 };
 use crate::membership::service::MembershipService;
 use crate::shared::auth::Claims;
@@ -442,6 +442,51 @@ pub async fn admin_list_users(
         }),
         Err(err) => {
             app_error_response::<Vec<AdminUserRow>>(err, "Error listing users")
+        }
+    }
+}
+
+// GET /admin/membership/settings
+#[get("/settings")]
+pub async fn admin_get_settings(
+    pool: Data<PgPool>,
+    claim: Option<ReqData<Claims>>,
+) -> HttpResponse {
+    let claims = match claim_or_401::<MembershipSettings>(claim) {
+        Ok(c) => c,
+        Err(resp) => return resp,
+    };
+    match MembershipService::get_settings(&pool, &claims).await {
+        Ok(settings) => HttpResponse::Ok().json(GenericResp {
+            message: "Ok".to_string(),
+            server_message: None,
+            data: Some(settings),
+        }),
+        Err(err) => {
+            app_error_response::<MembershipSettings>(err, "Error getting settings")
+        }
+    }
+}
+
+// PUT /admin/membership/settings
+#[put("/settings")]
+pub async fn admin_update_settings(
+    pool: Data<PgPool>,
+    body: web::Json<UpdateSettingsReq>,
+    claim: Option<ReqData<Claims>>,
+) -> HttpResponse {
+    let claims = match claim_or_401::<MembershipSettings>(claim) {
+        Ok(c) => c,
+        Err(resp) => return resp,
+    };
+    match MembershipService::update_settings(&pool, &claims, body.into_inner()).await {
+        Ok(settings) => HttpResponse::Ok().json(GenericResp {
+            message: "Ok".to_string(),
+            server_message: None,
+            data: Some(settings),
+        }),
+        Err(err) => {
+            app_error_response::<MembershipSettings>(err, "Error updating settings")
         }
     }
 }

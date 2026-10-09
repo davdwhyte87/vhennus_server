@@ -4,7 +4,8 @@ use uuid::Uuid;
 
 use crate::membership::models::{
     AdminQuestionView, AdminOptionView, AdminUserRow, AnswerDetailRow, ApplicationWithContact,
-    MembershipApplication, MembershipQuestion, MembershipQuestionOption, NewOptionReq,
+    MembershipApplication, MembershipQuestion, MembershipQuestionOption, MembershipSettings,
+    NewOptionReq,
 };
 use crate::shared::error::AppError;
 use crate::shared::general::get_time_naive;
@@ -766,5 +767,49 @@ impl MembershipRepo {
             AppError::FetchDataError
         })?;
         Ok(rows)
+    }
+
+    // ---------- Membership application pause switch ----------
+
+    pub async fn get_settings(pool: &PgPool) -> Result<MembershipSettings, AppError> {
+        let settings = sqlx::query_as!(
+            MembershipSettings,
+            "SELECT applications_paused FROM membership_settings WHERE id = 1"
+        )
+        .fetch_optional(pool)
+        .await
+        .map_err(|err| {
+            error!("error fetching membership settings: {}", err);
+            AppError::FetchDataError
+        })?
+        .unwrap_or(MembershipSettings {
+            applications_paused: false,
+        });
+        Ok(settings)
+    }
+
+    pub async fn are_applications_paused(pool: &PgPool) -> Result<bool, AppError> {
+        Ok(Self::get_settings(pool).await?.applications_paused)
+    }
+
+    pub async fn set_applications_paused(
+        pool: &PgPool,
+        paused: bool,
+    ) -> Result<MembershipSettings, AppError> {
+        let settings = sqlx::query_as!(
+            MembershipSettings,
+            "INSERT INTO membership_settings (id, applications_paused, updated_at)
+             VALUES (1, $1, NOW())
+             ON CONFLICT (id) DO UPDATE SET applications_paused = $1, updated_at = NOW()
+             RETURNING applications_paused",
+            paused
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(|err| {
+            error!("error updating membership settings: {}", err);
+            AppError::DBUpdateError
+        })?;
+        Ok(settings)
     }
 }

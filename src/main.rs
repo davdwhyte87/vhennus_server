@@ -223,7 +223,9 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(membership::controller::admin_update_question)
                         .service(membership::controller::admin_delete_question)
                         .service(membership::controller::admin_stats)
-                        .service(membership::controller::admin_list_users),
+                        .service(membership::controller::admin_list_users)
+                        .service(membership::controller::admin_get_settings)
+                        .service(membership::controller::admin_update_settings),
                 )
                 .service(
                     web::scope("chat")

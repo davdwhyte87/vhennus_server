@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use crate::membership::models::{
     status, AdminAnswerView, AdminApplicationDetail, AdminQuestionView, AdminStatsResp,
     AdminUserRow, AnswerItem, ApplicationWithContact, CreateQuestionReq, MembershipApplication,
-    PublicOption, PublicQuestion, UpdateQuestionReq,
+    MembershipSettings, PublicOption, PublicQuestion, UpdateQuestionReq, UpdateSettingsReq,
 };
 use crate::membership::repository::MembershipRepo;
 use crate::profile::service::ProfileService;
@@ -69,6 +69,12 @@ impl MembershipService {
         claim: &Claims,
         body: crate::membership::models::CreateApplicationReq,
     ) -> Result<MembershipApplication, AppError> {
+        if MembershipRepo::are_applications_paused(pool).await? {
+            return Err(AppError::BadRequestError(
+                "Membership applications are currently paused. Please check back later."
+                    .to_string(),
+            ));
+        }
         let profile = ProfileService::get_profile(pool, claim.user_name.clone())
             .await
             .map_err(|err| {
@@ -150,8 +156,10 @@ impl MembershipService {
             })?;
         let application =
             MembershipRepo::get_latest_by_user(pool, claim.user_name.clone()).await?;
+        let paused = MembershipRepo::are_applications_paused(pool).await?;
         Ok(crate::membership::models::MembershipStatusResp {
             is_member: profile.membership,
+            applications_paused: paused,
             application,
         })
     }
@@ -474,5 +482,24 @@ impl MembershipService {
     ) -> Result<Vec<AdminUserRow>, AppError> {
         Self::ensure_admin(claim)?;
         MembershipRepo::list_users_admin(pool).await
+    }
+
+    // ---------- Admin: pause switch ----------
+
+    pub async fn get_settings(
+        pool: &PgPool,
+        claim: &Claims,
+    ) -> Result<MembershipSettings, AppError> {
+        Self::ensure_admin(claim)?;
+        MembershipRepo::get_settings(pool).await
+    }
+
+    pub async fn update_settings(
+        pool: &PgPool,
+        claim: &Claims,
+        body: UpdateSettingsReq,
+    ) -> Result<MembershipSettings, AppError> {
+        Self::ensure_admin(claim)?;
+        MembershipRepo::set_applications_paused(pool, body.applications_paused).await
     }
 }
