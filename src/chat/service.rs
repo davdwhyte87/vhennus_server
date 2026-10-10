@@ -11,7 +11,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::chat::models::{
-    Chat, ChatPair, ChatPairView, CreateChatReq, PairUnread, UnreadResp,
+    Chat, ChatPair, ChatPairView, ChatReplyPreview, ChatView, CreateChatReq, PairUnread, UnreadResp,
 };
 use crate::chat::repository::{ChatPairRepo, ChatRepo};
 use crate::profile::service::ProfileService;
@@ -70,6 +70,8 @@ enum ClientFrame {
         receiver: String,
         message: Option<String>,
         image: Option<String>,
+        #[serde(default)]
+        reply_to_id: Option<String>,
     },
     Read {
         pair_id: String,
@@ -79,7 +81,7 @@ enum ClientFrame {
 pub struct ChatService {}
 
 impl ChatService {
-    pub async fn create_chat(pool: &PgPool, chat: Chat) -> Result<Chat, Box<dyn Error>> {
+    pub async fn create_chat(pool: &PgPool, mut chat: Chat) -> Result<ChatView, Box<dyn Error>> {
         // both users must exist (user_exists returns bool — enforce it)
         if !ProfileService::user_exists(pool, &*chat.sender.clone()).await? {
             return Err("Sender does not exist".into());
@@ -149,6 +151,16 @@ impl ChatService {
                     }
                 }
             }
+            // a reply in a brand-new pair can never reference an existing message
+            if chat
+                .reply_to_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .is_some()
+            {
+                return Err("Replied message not found".into());
+            }
             // construct new chat
             let mut chat = chat;
             chat.id = Uuid::new_v4().to_string();
@@ -164,8 +176,11 @@ impl ChatService {
             // update pair
             ChatPairRepo::update_chat_pair(pool, chat_pair_id.clone(), result.message.clone())
                 .await?;
-            return Ok(result);
+            return Ok(Self::to_view(pool, result).await);
         }
+
+        // the quoted message must belong to this pair; blanks normalize to none
+        chat.reply_to_id = Self::validated_reply(pool, &chat_pair_id, chat.reply_to_id).await?;
 
         // construct new chat
         let mut chat = chat;
@@ -182,7 +197,66 @@ impl ChatService {
         // update pair
         ChatPairRepo::update_chat_pair(pool, chat_pair_id.clone(), result.message.clone())
             .await?;
-        Ok(result)
+        Ok(Self::to_view(pool, result).await)
+    }
+
+    /// A reply must reference a message from the same pair; normalizes blanks.
+    async fn validated_reply(
+        pool: &PgPool,
+        pair_id: &str,
+        reply_to_id: Option<String>,
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let rid = match reply_to_id.map(|s| s.trim().to_string()).filter(|s| !s.is_empty()) {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+        let map = ChatRepo::reply_preview_map(pool, pair_id, std::slice::from_ref(&rid)).await?;
+        if map.contains_key(&rid) {
+            Ok(Some(rid))
+        } else {
+            Err("Replied message not found".into())
+        }
+    }
+
+    async fn to_view(pool: &PgPool, chat: Chat) -> ChatView {
+        let reply_to: Option<ChatReplyPreview> = match chat.reply_to_id.clone() {
+            Some(rid) if !rid.trim().is_empty() => ChatRepo::reply_preview_map(
+                pool,
+                &chat.pair_id,
+                std::slice::from_ref(&rid),
+            )
+            .await
+            .unwrap_or_default()
+            .remove(&rid),
+            _ => None,
+        };
+        ChatView { chat, reply_to }
+    }
+
+    /// Hydrate a whole history with one extra query for all quoted originals.
+    pub async fn to_views(pool: &PgPool, pair_id: &str, chats: Vec<Chat>) -> Vec<ChatView> {
+        let ids: Vec<String> = chats
+            .iter()
+            .filter_map(|c| {
+                c.reply_to_id
+                    .clone()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            })
+            .collect();
+        let map = ChatRepo::reply_preview_map(pool, pair_id, &ids)
+            .await
+            .unwrap_or_default();
+        chats
+            .into_iter()
+            .map(|c| {
+                let reply_to = c
+                    .reply_to_id
+                    .clone()
+                    .and_then(|rid| map.get(&rid).cloned());
+                ChatView { chat: c, reply_to }
+            })
+            .collect()
     }
 
     pub async fn get_chats_by_pair_id(
@@ -312,6 +386,7 @@ pub async fn chat_ws_service(
                         receiver,
                         message,
                         image,
+                        reply_to_id,
                     } => {
                         let text_body = message.clone().unwrap_or_default();
                         if text_body.trim().is_empty() && image.is_none() {
@@ -334,6 +409,7 @@ pub async fn chat_ws_service(
                             receiver: receiver.clone(),
                             message: text_body,
                             image,
+                            reply_to_id,
                             created_at: get_time_naive(),
                             updated_at: get_time_naive(),
                         };
@@ -382,7 +458,7 @@ pub async fn chat_ws_service(
                         push_unread(pool, &sessions, &receiver).await;
                         if sessions_for(&sessions, &receiver).is_empty() {
                             log::debug!("Recipient {} not online", receiver);
-                            send_offline_notification(pool, &res_chat).await;
+                            send_offline_notification(pool, &res_chat.chat).await;
                         }
                     }
                     ClientFrame::Read { pair_id } => {

@@ -2,7 +2,7 @@ use std::error::Error;
 
 use sqlx::PgPool;
 
-use crate::chat::models::{Chat, ChatPair, ChatPairView, Circle, UnreadRow};
+use crate::chat::models::{Chat, ChatPair, ChatPairView, ChatReplyPreview, Circle, UnreadRow};
 use crate::shared::error::ServiceError;
 use crate::shared::general::get_time_naive;
 
@@ -12,8 +12,8 @@ impl ChatRepo {
     pub async fn create_chat(pool: &PgPool, chat: &Chat) -> Result<(), Box<dyn Error>> {
         sqlx::query_as!(
             Chat,
-            "INSERT INTO chats (id,sender,receiver,message, image,created_at,updated_at, pair_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+            "INSERT INTO chats (id,sender,receiver,message, image,created_at,updated_at, pair_id, reply_to_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
             chat.id,
             chat.sender,
             chat.receiver,
@@ -21,7 +21,8 @@ impl ChatRepo {
             chat.image,
             chat.created_at,
             chat.updated_at,
-            chat.pair_id
+            chat.pair_id,
+            chat.reply_to_id
         )
         .execute(pool)
         .await?;
@@ -40,6 +41,39 @@ impl ChatRepo {
         .fetch_all(pool)
         .await?;
         Ok(chats)
+    }
+
+    /// Quoted originals for a batch of reply ids (same pair only).
+    /// Returns id -> preview so history hydration costs one query.
+    pub async fn reply_preview_map(
+        pool: &PgPool,
+        pair_id: &str,
+        ids: &[String],
+    ) -> Result<std::collections::HashMap<String, ChatReplyPreview>, Box<dyn Error>> {
+        use std::collections::HashMap;
+        let mut map = HashMap::new();
+        if ids.is_empty() {
+            return Ok(map);
+        }
+        let rows = sqlx::query_as!(
+            Chat,
+            "SELECT * FROM chats WHERE pair_id = $1 AND id = ANY($2)",
+            pair_id,
+            ids
+        )
+        .fetch_all(pool)
+        .await?;
+        for c in rows {
+            map.insert(
+                c.id.clone(),
+                ChatReplyPreview {
+                    id: c.id,
+                    sender: c.sender,
+                    message: c.message,
+                },
+            );
+        }
+        Ok(map)
     }
 }
 

@@ -27,7 +27,7 @@ mod wallet;
 
 use crate::chat::service::UserConnections;
 use crate::chat::service::ChatSessions;
-use crate::groups::models::{RoomMembers, UserRoomSessions};
+use crate::groups::models::{GroupPresence, GroupSessions};
 use crate::shared::config::CONFIG;
 
 #[get("/hello")]
@@ -69,8 +69,8 @@ async fn main() -> std::io::Result<()> {
     // hashmap for holding websocket connections for chat
     let user_connections: UserConnections = Arc::new(DashMap::new());
     let chat_sessions: ChatSessions = Arc::new(Mutex::new(HashMap::new()));
-    let room_members: RoomMembers = Arc::new(DashMap::new());
-    let user_room_sessions: UserRoomSessions = Arc::new(DashMap::new());
+    let group_sessions: GroupSessions = Arc::new(DashMap::new());
+    let group_presence: GroupPresence = Arc::new(DashMap::new());
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
 
@@ -83,7 +83,7 @@ async fn main() -> std::io::Result<()> {
         HttpServer::new(move|| {
             let cors = Cors::default()
                 .allowed_origin("http://localhost:5173")
-                .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+                .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
                 .allowed_headers(vec![
                     http::header::AUTHORIZATION,
                     http::header::ACCEPT,
@@ -99,8 +99,8 @@ async fn main() -> std::io::Result<()> {
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
                 .app_data(web::Data::new(chat_sessions.clone()))
-                .app_data(web::Data::new(room_members.clone()))
-                .app_data(web::Data::new(user_room_sessions.clone()))
+                .app_data(web::Data::new(group_sessions.clone()))
+                .app_data(web::Data::new(group_presence.clone()))
                 
                 .configure(configure_services)
         })
@@ -111,7 +111,7 @@ async fn main() -> std::io::Result<()> {
         HttpServer::new(move|| {
             let cors_prod =  Cors::default()
                 .allowed_origin("https://www.vhennus.org")
-                .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+                .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
                 .allowed_headers(vec![
                     http::header::AUTHORIZATION,
                     http::header::ACCEPT,
@@ -125,8 +125,8 @@ async fn main() -> std::io::Result<()> {
                 .app_data(Data::new(pool.clone()))
                 .app_data(web::Data::new(user_connections.clone()))
                 .app_data(web::Data::new(chat_sessions.clone()))
-                .app_data(web::Data::new(room_members.clone()))
-                .app_data(Data::new(user_room_sessions.clone()))
+                .app_data(web::Data::new(group_sessions.clone()))
+                .app_data(web::Data::new(group_presence.clone()))
                 .configure(configure_services)
         })
             .bind(address)?
@@ -140,7 +140,7 @@ async fn main() -> std::io::Result<()> {
 #[options("/api/v1/auth/{tail:.*}")]
 async fn options_handler() -> HttpResponse {
     HttpResponse::Ok()
-        .append_header(("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS"))
+        .append_header(("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS"))
         .append_header(("Access-Control-Allow-Headers", "Content-Type, Authorization, x-requested-with"))
         .append_header(("Access-Control-Max-Age", "3600"))
         .finish()
@@ -190,18 +190,28 @@ fn configure_services(cfg: &mut ServiceConfig) {
                 )
                 .service(
                     web::scope("group")
-                        .service(groups::controller::create_group)
-                        .service(groups::controller::create_room)
-                        .service(groups::controller::join_room)
-                        .service(groups::controller::join_room_with_code)
-                        .service(groups::controller::generate_room_code)
-                        .service(groups::controller::update_group)
-                        .service(groups::controller::update_room)
-                        .service(groups::controller::leave_room)
-                        .service(groups::controller::get_my_groups)
-                        .service(groups::controller::get_group)
-                        .service(groups::controller::get_room)
-                        .route("/ws_group", web::get().to(groups::controller::connect_to_rooms))
+                        // Groups: one group = one feed (no rooms)
+                        .service(groups::controller_v2::create_group_v2)
+                        .service(groups::controller_v2::update_group_v2)
+                        .service(groups::controller_v2::my_groups_v2)
+                        .service(groups::controller_v2::search_groups_v2)
+                        .service(groups::controller_v2::unread_v2)
+                        .service(groups::controller_v2::list_categories_v2)
+                        .service(groups::controller_v2::invite_preview_v2)
+                        .service(groups::controller_v2::get_group_v2)
+                        .service(groups::controller_v2::group_members_v2)
+                        .service(groups::controller_v2::remove_member_v2)
+                        .service(groups::controller_v2::join_group_v2)
+                        .service(groups::controller_v2::list_requests_v2)
+                        .service(groups::controller_v2::respond_request_v2)
+                        .service(groups::controller_v2::add_topic_v2)
+                        .service(groups::controller_v2::close_topic_v2)
+                        .service(groups::controller_v2::group_messages_v2)
+                        .service(groups::controller_v2::mark_read_v2)
+                        .service(groups::controller_v2::admin_list_groups_v2)
+                        .service(groups::controller_v2::admin_get_group_v2)
+                        .service(groups::controller_v2::admin_add_category_v2)
+                        .service(groups::controller_v2::admin_delete_category_v2)
                 )
                 .service(
                     web::scope("membership")
@@ -242,6 +252,7 @@ fn configure_services(cfg: &mut ServiceConfig) {
         .service(index)
         .route("/ws", web::get().to(chat::service::ws_chat))
         .route("/chat/ws", web::get().to(chat::controller::wsocket_chat_connect) )
+        .route("/group/ws", web::get().to(groups::controller_v2::ws_group_v2_connect))
         .service(user::controller::create_account)
         .service(user::controller::login)
         .service(user::controller::confirm_account)

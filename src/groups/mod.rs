@@ -1,6 +1,6 @@
 
 
-pub mod controller;
+pub mod controller_v2;
 pub mod models;
-pub mod repository;
-pub mod service;
+pub mod repository_v2;
+pub mod service_v2;

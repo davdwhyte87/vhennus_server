@@ -10,7 +10,7 @@ use serde::Deserialize;
 use sqlx::PgPool;
 
 use crate::chat::models::{
-    Chat, ChatPair, Circle, CreateChatReq, CreateGroupChatReq, GetChatsView, ChatPairView,
+    Chat, ChatPair, ChatView, Circle, CreateChatReq, CreateGroupChatReq, GetChatsView, ChatPairView,
     MarkReadReq, UnreadResp,
 };
 use crate::chat::service::{chat_ws_service, ChatPairService, ChatService, ChatSessions};
@@ -24,7 +24,7 @@ pub async fn create_chat(
     req: Result<web::Json<CreateChatReq>, actix_web::Error>,
     claim: Option<ReqData<Claims>>,
 ) -> HttpResponse {
-    let mut respData = GenericResp::<Chat> {
+    let mut respData = GenericResp::<ChatView> {
         message: "".to_string(),
         server_message: Some("".to_string()),
         data: None,
@@ -60,6 +60,7 @@ pub async fn create_chat(
         receiver: req.receiver.clone(),
         message: "".to_string(),
         image: None,
+        reply_to_id: req.reply_to_id.clone(),
         created_at: get_current_time_stamp().parse().unwrap(),
         updated_at: get_current_time_stamp().parse().unwrap(),
     };
@@ -103,7 +104,7 @@ pub async fn get_by_pair(
     path: web::Path<ChatPath>,
     claim: Option<ReqData<Claims>>,
 ) -> HttpResponse {
-    let mut respData = GenericResp::<Vec<Chat>> {
+    let mut respData = GenericResp::<Vec<ChatView>> {
         message: "".to_string(),
         server_message: Some("".to_string()),
         data: None,
@@ -144,6 +145,7 @@ pub async fn get_by_pair(
             return HttpResponse::InternalServerError().json(respData);
         }
     };
+    let chats = ChatService::to_views(&pool, &path.id, chats).await;
 
     respData.message = "ok".to_string();
     respData.server_message = None;
@@ -273,6 +275,7 @@ pub async fn get_chats(
             return HttpResponse::InternalServerError().json(respData);
         }
     };
+    let chats = ChatService::to_views(&pool, &chat_pair_resp.id, chats).await;
 
     let get_chats_view = GetChatsView {
         chats: chats,

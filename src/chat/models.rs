@@ -15,6 +15,24 @@ pub struct Chat {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub pair_id: String,
+    pub reply_to_id: Option<String>,
+}
+
+/// Quoted original for a reply (same pair only, best-effort).
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct ChatReplyPreview {
+    pub id: String,
+    pub sender: String,
+    pub message: String,
+}
+
+/// Wire shape for a chat message: flat Chat fields plus an optional quote.
+/// Additive over Chat, so older clients keep working.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct ChatView {
+    #[serde(flatten)]
+    pub chat: Chat,
+    pub reply_to: Option<ChatReplyPreview>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default, sqlx::FromRow)]
@@ -57,7 +75,7 @@ pub struct Circle {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct GetChatsView {
     pub chat_pair: ChatPairView,
-    pub chats: Vec<Chat>,
+    pub chats: Vec<ChatView>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
@@ -68,6 +86,8 @@ pub struct CreateChatReq {
 
     pub message: Option<String>,
     pub image: Option<String>,
+    #[serde(default)]
+    pub reply_to_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Validate)]
