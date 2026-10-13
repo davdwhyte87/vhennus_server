@@ -423,6 +423,85 @@ pub struct GroupUnreadResp {
 pub type GroupSessions = Arc<DashMap<String, DashMap<String, Session>>>;
 pub type GroupPresence = Arc<DashMap<String, DashMap<String, ()>>>;
 
+/// In-memory group call sessions: group_id -> GroupCall.
+/// One active call per group. Participants ordered by join time for
+/// call-admin succession.
+pub type CallSessions = Arc<DashMap<String, GroupCall>>;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CallParticipant {
+    pub user_name: String,
+    pub joined_at: NaiveDateTime,
+    #[serde(default)]
+    pub group_role: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GroupCall {
+    pub group_id: String,
+    pub started_by: String,
+    pub started_at: NaiveDateTime,
+    pub version: u64,
+    /// Current mic holder (single speaker, broadcasts to rest).
+    pub speaker: String,
+    /// Current call admin (moderation rights: grant/revoke/end).
+    pub call_admin: String,
+    /// Group owner snapshot (for handover priority on rejoin).
+    pub group_owner: String,
+    pub participants: Vec<CallParticipant>,
+    pub hands: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GroupCallState {
+    pub group_id: String,
+    pub active: bool,
+    pub version: u64,
+    pub speaker: Option<String>,
+    pub call_admin: Option<String>,
+    pub participants: Vec<CallParticipant>,
+    pub hands: Vec<String>,
+    pub started_by: Option<String>,
+    pub started_at: Option<NaiveDateTime>,
+}
+
+impl GroupCall {
+    pub fn to_state(&self) -> GroupCallState {
+        GroupCallState {
+            group_id: self.group_id.clone(),
+            active: true,
+            version: self.version,
+            speaker: Some(self.speaker.clone()),
+            call_admin: Some(self.call_admin.clone()),
+            participants: self.participants.clone(),
+            hands: self.hands.clone(),
+            started_by: Some(self.started_by.clone()),
+            started_at: Some(self.started_at),
+        }
+    }
+
+    pub fn inactive(group_id: &str) -> GroupCallState {
+        GroupCallState {
+            group_id: group_id.to_string(),
+            active: false,
+            version: 0,
+            speaker: None,
+            call_admin: None,
+            participants: vec![],
+            hands: vec![],
+            started_by: None,
+            started_at: None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetRoleReq {
+    /// "promote" | "demote"
+    pub action: String,
+    pub user_name: String,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum GroupClientFrame {
@@ -436,6 +515,17 @@ pub enum GroupClientFrame {
         reply_to_msg_id: Option<String>,
     },
     Read { group_id: String, msg_id: Option<String> },
+    CallStart { group_id: String },
+    CallJoin { group_id: String },
+    CallLeave { group_id: String },
+    CallEnd { group_id: String },
+    RaiseHand { group_id: String },
+    LowerHand { group_id: String },
+    GrantMic { group_id: String, to: String },
+    RevokeMic { group_id: String },
+    CallOffer { group_id: String, to: String, sdp: String },
+    CallAnswer { group_id: String, to: String, sdp: String },
+    CallIce { group_id: String, to: String, candidate: String },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -447,6 +537,10 @@ pub enum GroupServerFrame {
     Error { temp_id: Option<String>, message: String },
     Unread { total: i64, groups: Vec<GroupUnreadItem> },
     Presence { group_id: String, online: Vec<String> },
+    CallState { call: GroupCallState },
+    CallOffer { group_id: String, from: String, sdp: String },
+    CallAnswer { group_id: String, from: String, sdp: String },
+    CallIce { group_id: String, from: String, candidate: String },
 }
 
 pub fn invite_code() -> String {

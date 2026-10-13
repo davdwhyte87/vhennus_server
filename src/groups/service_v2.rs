@@ -8,13 +8,15 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::groups::models::{
-    invite_code, CreateGroupV2Req, GroupClientFrame, GroupMessageView, GroupPresence,
-    GroupServerFrame, GroupSessions, UpdateGroupV2Req,
+    invite_code, CallParticipant, CallSessions, CreateGroupV2Req, GroupCall, GroupCallState,
+    GroupClientFrame, GroupMessageView, GroupPresence, GroupServerFrame, GroupSessions,
+    UpdateGroupV2Req,
 };
 use crate::groups::repository_v2::GroupV2Repo;
 use crate::shared::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
 use crate::shared::auth::Claims;
 use crate::shared::error::AppError;
+use crate::shared::general::get_time_naive;
 use crate::shared::strings::truncate_string;
 
 pub struct GroupV2Service;
@@ -75,7 +77,10 @@ impl GroupV2Service {
         req: &UpdateGroupV2Req,
     ) -> Result<(), AppError> {
         let g = GroupV2Repo::get_group(pool, group_id).await?;
-        Self::owner_of(&g.user_name, claim)?;
+        // owner or group admin may edit info
+        if g.user_name != claim.user_name && !GroupV2Repo::is_group_admin(pool, group_id, &claim.user_name).await.unwrap_or(false) {
+            return Err(AppError::UnauthorizedError);
+        }
         if let Some(n) = req.name.as_deref() {
             if n.trim().is_empty() || n.len() > 100 {
                 return Err(AppError::BadRequestError("group name must be 1-100 chars".to_string()));
@@ -110,6 +115,187 @@ impl GroupV2Service {
             GroupV2Repo::add_member(pool, group_id, &claim.user_name, "member").await?;
             Ok("joined".to_string())
         }
+    }
+
+    /// Owner-only: promote member -> admin, demote admin -> member.
+    pub async fn set_role(
+        pool: &PgPool,
+        claim: &Claims,
+        group_id: &str,
+        target: &str,
+        action: &str,
+    ) -> Result<String, AppError> {
+        let g = GroupV2Repo::get_group(pool, group_id).await?;
+        if g.user_name != claim.user_name {
+            return Err(AppError::UnauthorizedError);
+        }
+        if target == g.user_name {
+            return Err(AppError::BadRequestError("Cannot change the owner role".to_string()));
+        }
+        // target must be a member
+        let m = GroupV2Repo::is_member(pool, group_id, target).await?;
+        if m.is_none() {
+            return Err(AppError::NotFoundError("member".to_string(), target.to_string()));
+        }
+        match action {
+            "promote" => {
+                GroupV2Repo::set_member_role(pool, group_id, target, "admin").await?;
+                Ok("admin".to_string())
+            }
+            "demote" => {
+                GroupV2Repo::set_member_role(pool, group_id, target, "member").await?;
+                Ok("member".to_string())
+            }
+            _ => Err(AppError::BadRequestError("action must be promote|demote".to_string())),
+        }
+    }
+
+    // ---------- group calls (audio, single speaker, P2P signaling) ----------
+    fn call_inactive(group_id: &str) -> GroupServerFrame {
+        GroupServerFrame::CallState { call: GroupCall::inactive(group_id) }
+    }
+
+    async fn broadcast_call(
+        sessions: &GroupSessions,
+        presence: &GroupPresence,
+        group_id: &str,
+        call: Option<GroupCall>,
+    ) {
+        let frame = match call {
+            Some(c) => GroupServerFrame::CallState { call: c.to_state() },
+            None => Self::call_inactive(group_id),
+        };
+        let Ok(s) = serde_json::to_string(&frame) else { return };
+        let online = Self::online_in(presence, group_id);
+        for u in online {
+            for mut sess in Self::sessions_for(sessions, &u) {
+                let _ = sess.text(s.clone()).await;
+            }
+        }
+    }
+
+    async fn send_call_to(sessions: &GroupSessions, user: &str, frame: &GroupServerFrame) {
+        if let Ok(s) = serde_json::to_string(frame) {
+            for mut sess in Self::sessions_for(sessions, user) {
+                let _ = sess.text(s.clone()).await;
+            }
+        }
+    }
+
+    /// Succession priority: group owner on call wins (handover on rejoin),
+    /// else earliest-joined group admin on call, else earliest-joined participant.
+    /// `roles`: user_name -> group role (owner/admin/member).
+    fn elect_call_admin(
+        participants: &[CallParticipant],
+        group_owner: &str,
+        roles: &std::collections::HashMap<String, String>,
+    ) -> Option<String> {
+        if participants.is_empty() {
+            return None;
+        }
+        if participants.iter().any(|p| p.user_name == group_owner) {
+            return Some(group_owner.to_string());
+        }
+        // earliest admin on the call
+        let mut admins: Vec<&CallParticipant> = participants
+            .iter()
+            .filter(|p| roles.get(&p.user_name).map(|r| r == "owner" || r == "admin").unwrap_or(false))
+            .collect();
+        admins.sort_by(|a, b| a.joined_at.cmp(&b.joined_at));
+        if let Some(a) = admins.first() {
+            return Some(a.user_name.clone());
+        }
+        // fallback: earliest joiner
+        let mut sorted = participants.to_vec();
+        sorted.sort_by(|a, b| a.joined_at.cmp(&b.joined_at));
+        sorted.first().map(|p| p.user_name.clone())
+    }
+
+    async fn roles_for(pool: &PgPool, group_id: &str, users: &[String]) -> std::collections::HashMap<String, String> {
+        let mut map = std::collections::HashMap::new();
+        for u in users {
+            let role = GroupV2Repo::is_member(pool, group_id, u)
+                .await
+                .ok()
+                .flatten()
+                .map(|m| m.role)
+                .unwrap_or_else(|| "member".to_string());
+            map.insert(u.clone(), role);
+        }
+        // owner row may be stored on groups table only; ensure owner maps to owner
+        if let Ok(g) = GroupV2Repo::get_group(pool, group_id).await {
+            map.entry(g.user_name.clone()).or_insert("owner".to_string());
+            // owner is always owner regardless of member row
+            map.insert(g.user_name, "owner".to_string());
+        }
+        map
+    }
+
+    pub async fn call_state(pool: &PgPool, calls: &CallSessions, group_id: &str) -> GroupCallState {
+        if let Some(c) = calls.get(group_id) {
+            c.to_state()
+        } else {
+            GroupCall::inactive(group_id)
+        }
+    }
+
+    pub async fn call_start(
+        pool: &PgPool,
+        calls: &CallSessions,
+        sessions: &GroupSessions,
+        presence: &GroupPresence,
+        claim: &Claims,
+        group_id: &str,
+    ) -> Result<GroupCallState, AppError> {
+        if !GroupV2Repo::is_group_admin(pool, group_id, &claim.user_name).await? {
+            return Err(AppError::UnauthorizedError);
+        }
+        let g = GroupV2Repo::get_group(pool, group_id).await?;
+        if let Some(c) = calls.get(group_id) {
+            return Ok(c.to_state());
+        }
+        let now = get_time_naive();
+        let role = GroupV2Repo::is_member(pool, group_id, &claim.user_name)
+            .await?
+            .map(|m| m.role)
+            .unwrap_or_else(|| "admin".to_string());
+        let call = GroupCall {
+            group_id: group_id.to_string(),
+            started_by: claim.user_name.clone(),
+            started_at: now,
+            version: 1,
+            speaker: claim.user_name.clone(),
+            call_admin: claim.user_name.clone(),
+            group_owner: g.user_name,
+            participants: vec![CallParticipant {
+                user_name: claim.user_name.clone(),
+                joined_at: now,
+                group_role: role,
+            }],
+            hands: vec![],
+        };
+        let state = call.to_state();
+        calls.insert(group_id.to_string(), call);
+        Self::broadcast_call(sessions, presence, group_id, calls.get(group_id).map(|c| c.clone())).await;
+        Ok(state)
+    }
+
+    pub async fn call_end(
+        pool: &PgPool,
+        calls: &CallSessions,
+        sessions: &GroupSessions,
+        presence: &GroupPresence,
+        claim: &Claims,
+        group_id: &str,
+    ) -> Result<(), AppError> {
+        let is_call_admin = calls.get(group_id).map(|c| c.call_admin == claim.user_name).unwrap_or(false);
+        let is_group_admin = GroupV2Repo::is_group_admin(pool, group_id, &claim.user_name).await.unwrap_or(false);
+        if !is_call_admin && !is_group_admin {
+            return Err(AppError::UnauthorizedError);
+        }
+        calls.remove(group_id);
+        Self::broadcast_call(sessions, presence, group_id, None).await;
+        Ok(())
     }
 
     pub async fn send_message(
@@ -202,6 +388,70 @@ impl GroupV2Service {
         }
     }
 
+    async fn handle_call_leave(
+        pool: &PgPool,
+        calls: &CallSessions,
+        sessions: &GroupSessions,
+        presence: &GroupPresence,
+        group_id: &str,
+        user: &str,
+    ) {
+        let (became_empty, ended) = {
+            let Some(mut call) = calls.get_mut(group_id) else { return };
+            call.participants.retain(|p| p.user_name != user);
+            call.hands.retain(|h| h != user);
+            if call.participants.is_empty() {
+                (true, false)
+            } else {
+                let mut changed = false;
+                // speaker left -> mic falls back to call admin (or newly elected admin)
+                if call.speaker == user {
+                    call.speaker = call.call_admin.clone();
+                    changed = true;
+                }
+                // call admin left -> elect successor by join order (owner > admin > earliest)
+                if call.call_admin == user {
+                    let users: Vec<String> = call.participants.iter().map(|p| p.user_name.clone()).collect();
+                    // drop borrow of call before await: clone needed fields
+                    let owner = call.group_owner.clone();
+                    let parts = call.participants.clone();
+                    drop(call);
+                    let roles = Self::roles_for(pool, group_id, &users).await;
+                    if let Some(mut call) = calls.get_mut(group_id) {
+                        if let Some(next) = Self::elect_call_admin(&parts, &owner, &roles) {
+                            call.call_admin = next.clone();
+                            // if speaker was the leaver or dangling, point mic at new admin
+                            if call.speaker == user || !call.participants.iter().any(|p| p.user_name == call.speaker) {
+                                call.speaker = next;
+                            }
+                        }
+                        call.version += 1;
+                        changed = true;
+                    }
+                    let snapshot = calls.get(group_id).map(|c| c.clone());
+                    Self::broadcast_call(sessions, presence, group_id, snapshot).await;
+                    return;
+                }
+                // speaker dangling (removed elsewhere) -> reset to admin
+                if !call.participants.iter().any(|p| p.user_name == call.speaker) {
+                    call.speaker = call.call_admin.clone();
+                    changed = true;
+                }
+                if changed {
+                    call.version += 1;
+                }
+                (false, changed)
+            }
+        };
+        if became_empty {
+            calls.remove(group_id);
+            Self::broadcast_call(sessions, presence, group_id, None).await;
+        } else if ended {
+            let snapshot = calls.get(group_id).map(|c| c.clone());
+            Self::broadcast_call(sessions, presence, group_id, snapshot).await;
+        }
+    }
+
     /// Single multiplexed socket per device. Client sends Join per open group,
     /// Send for messages, Read for cursors. Membership is re-checked on every frame.
     pub async fn group_ws_v2(
@@ -210,6 +460,7 @@ impl GroupV2Service {
         user: String,
         sessions: web::Data<GroupSessions>,
         presence: web::Data<GroupPresence>,
+        calls: web::Data<CallSessions>,
         pool: &PgPool,
     ) -> Result<(), ActixError> {
         let conn_id = Uuid::new_v4().to_string();
@@ -326,6 +577,135 @@ impl GroupV2Service {
                             let _ = GroupV2Repo::mark_read(pool, &group_id, &user, msg_id.as_deref()).await;
                             Self::push_unread(pool, &sessions, &user).await;
                         }
+                        GroupClientFrame::CallStart { group_id } => {
+                            let claim = Claims { role: String::new(), email: String::new(), user_name: user.clone(), membership: false, exp: 0 };
+                            match Self::call_start(pool, &calls, &sessions, &presence, &claim, &group_id).await {
+                                Ok(_) => {}
+                                Err(_) => {
+                                    let ef = GroupServerFrame::Error { temp_id: None, message: "Cannot start call".to_string() };
+                                    Self::send_call_to(&sessions, &user, &ef).await;
+                                }
+                            }
+                        }
+                        GroupClientFrame::CallJoin { group_id } => {
+                            if GroupV2Repo::is_member(pool, &group_id, &user).await.unwrap_or(None).is_none() {
+                                let ef = GroupServerFrame::Error { temp_id: None, message: "You are not a member".to_string() };
+                                Self::send_call_to(&sessions, &user, &ef).await;
+                                continue;
+                            }
+                            let Some(mut call) = calls.get_mut(&group_id) else {
+                                let ef = GroupServerFrame::Error { temp_id: None, message: "No active call".to_string() };
+                                Self::send_call_to(&sessions, &user, &ef).await;
+                                continue;
+                            };
+                            if !call.participants.iter().any(|p| p.user_name == user) {
+                                let role = GroupV2Repo::is_member(pool, &group_id, &user).await.ok().flatten().map(|m| m.role).unwrap_or_else(|| "member".to_string());
+                                call.participants.push(CallParticipant { user_name: user.clone(), joined_at: get_time_naive(), group_role: role });
+                            }
+                            // handover on rejoin: owner > earliest admin > earliest joiner
+                            let users: Vec<String> = call.participants.iter().map(|p| p.user_name.clone()).collect();
+                            let owner = call.group_owner.clone();
+                            let parts = call.participants.clone();
+                            drop(call);
+                            let roles = Self::roles_for(pool, &group_id, &users).await;
+                            if let Some(mut call) = calls.get_mut(&group_id) {
+                                if let Some(next) = Self::elect_call_admin(&parts, &owner, &roles) {
+                                    call.call_admin = next;
+                                }
+                                call.version += 1;
+                            }
+                            let snapshot = calls.get(&group_id).map(|c| c.clone());
+                            Self::broadcast_call(&sessions, &presence, &group_id, snapshot).await;
+                        }
+                        GroupClientFrame::CallLeave { group_id } => {
+                            Self::handle_call_leave(pool, &calls, &sessions, &presence, &group_id, &user).await;
+                        }
+                        GroupClientFrame::CallEnd { group_id } => {
+                            let claim = Claims { role: String::new(), email: String::new(), user_name: user.clone(), membership: false, exp: 0 };
+                            let _ = Self::call_end(pool, &calls, &sessions, &presence, &claim, &group_id).await;
+                        }
+                        GroupClientFrame::RaiseHand { group_id } => {
+                            if let Some(mut call) = calls.get_mut(&group_id) {
+                                let in_call = call.participants.iter().any(|p| p.user_name == user);
+                                if in_call && call.speaker != user && !call.hands.contains(&user) {
+                                    call.hands.push(user.clone());
+                                    call.version += 1;
+                                    let snapshot = call.clone();
+                                    drop(call);
+                                    Self::broadcast_call(&sessions, &presence, &group_id, Some(snapshot)).await;
+                                }
+                            }
+                        }
+                        GroupClientFrame::LowerHand { group_id } => {
+                            if let Some(mut call) = calls.get_mut(&group_id) {
+                                if call.hands.contains(&user) {
+                                    call.hands.retain(|h| h != &user);
+                                    call.version += 1;
+                                    let snapshot = call.clone();
+                                    drop(call);
+                                    Self::broadcast_call(&sessions, &presence, &group_id, Some(snapshot)).await;
+                                }
+                            }
+                        }
+                        GroupClientFrame::GrantMic { group_id, to } => {
+                            let allowed = if let Some(call) = calls.get(&group_id) {
+                                let from_ok = call.call_admin == user || call.speaker == user;
+                                let to_in_call = call.participants.iter().any(|p| p.user_name == to);
+                                // holder may only pass to someone raising hand; call admin may grant to anyone in call
+                                let hands_ok = call.call_admin == user || call.hands.contains(&to);
+                                from_ok && to_in_call && hands_ok
+                            } else { false };
+                            if allowed {
+                                if let Some(mut call) = calls.get_mut(&group_id) {
+                                    call.speaker = to.clone();
+                                    call.hands.retain(|h| h != &to);
+                                    call.version += 1;
+                                    let snapshot = call.clone();
+                                    drop(call);
+                                    Self::broadcast_call(&sessions, &presence, &group_id, Some(snapshot)).await;
+                                }
+                            } else {
+                                let ef = GroupServerFrame::Error { temp_id: None, message: "Cannot grant mic".to_string() };
+                                Self::send_call_to(&sessions, &user, &ef).await;
+                            }
+                        }
+                        GroupClientFrame::RevokeMic { group_id } => {
+                            let allowed = calls.get(&group_id).map(|c| c.call_admin == user).unwrap_or(false);
+                            if allowed {
+                                if let Some(mut call) = calls.get_mut(&group_id) {
+                                    call.speaker = call.call_admin.clone();
+                                    call.version += 1;
+                                    let snapshot = call.clone();
+                                    drop(call);
+                                    Self::broadcast_call(&sessions, &presence, &group_id, Some(snapshot)).await;
+                                }
+                            } else {
+                                let ef = GroupServerFrame::Error { temp_id: None, message: "Only call admin can take mic".to_string() };
+                                Self::send_call_to(&sessions, &user, &ef).await;
+                            }
+                        }
+                        GroupClientFrame::CallOffer { group_id, to, sdp } => {
+                            // only speaker broadcasts offers
+                            let ok = calls.get(&group_id).map(|c| c.speaker == user && c.participants.iter().any(|p| p.user_name == to)).unwrap_or(false);
+                            if ok {
+                                let f = GroupServerFrame::CallOffer { group_id, from: user.clone(), sdp };
+                                Self::send_call_to(&sessions, &to, &f).await;
+                            }
+                        }
+                        GroupClientFrame::CallAnswer { group_id, to, sdp } => {
+                            let ok = calls.get(&group_id).map(|c| c.participants.iter().any(|p| p.user_name == to) && c.participants.iter().any(|p| p.user_name == user)).unwrap_or(false);
+                            if ok {
+                                let f = GroupServerFrame::CallAnswer { group_id, from: user.clone(), sdp };
+                                Self::send_call_to(&sessions, &to, &f).await;
+                            }
+                        }
+                        GroupClientFrame::CallIce { group_id, to, candidate } => {
+                            let ok = calls.get(&group_id).map(|c| c.participants.iter().any(|p| p.user_name == to) && c.participants.iter().any(|p| p.user_name == user)).unwrap_or(false);
+                            if ok {
+                                let f = GroupServerFrame::CallIce { group_id, from: user.clone(), candidate };
+                                Self::send_call_to(&sessions, &to, &f).await;
+                            }
+                        }
                     }
                 }
                 Message::Ping(p) => {
@@ -357,6 +737,11 @@ impl GroupV2Service {
                         presence.remove(&gid);
                     }
                 }
+            }
+            // leave all calls (triggers succession / mic fallback)
+            let in_calls: Vec<String> = calls.iter().filter(|e| e.participants.iter().any(|p| p.user_name == user)).map(|e| e.group_id.clone()).collect();
+            for gid in in_calls {
+                Self::handle_call_leave(pool, &calls, &sessions, &presence, &gid, &user).await;
             }
         }
         debug!("group ws disconnected {}", user);

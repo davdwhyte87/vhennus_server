@@ -239,6 +239,39 @@ impl GroupV2Repo {
         Ok(())
     }
 
+    /// Owner-only role change: member <-> admin. Owner role is immutable here.
+    pub async fn set_member_role(pool: &PgPool, group_id: &str, user: &str, role: &str) -> Result<(), AppError> {
+        if role != "admin" && role != "member" {
+            return Err(AppError::BadRequestError("role must be admin|member".to_string()));
+        }
+        let r = sqlx::query("UPDATE group_members SET role=$3 WHERE group_id=$1 AND user_name=$2 AND role != 'owner'")
+            .bind(group_id)
+            .bind(user)
+            .bind(role)
+            .execute(pool)
+            .await
+            .map_err(|e| {
+                error!("set member role error: {}", e);
+                AppError::DBUpdateError
+            })?;
+        if r.rows_affected() == 0 {
+            return Err(AppError::NotFoundError("member".to_string(), user.to_string()));
+        }
+        Ok(())
+    }
+
+    /// Group-level moderator: owner (groups.user_name) or member row role in (owner, admin).
+    pub async fn is_group_admin(pool: &PgPool, group_id: &str, user: &str) -> Result<bool, AppError> {
+        let g = Self::get_group(pool, group_id).await?;
+        if g.user_name == user {
+            return Ok(true);
+        }
+        match Self::is_member(pool, group_id, user).await? {
+            Some(m) => Ok(m.role == "owner" || m.role == "admin"),
+            None => Ok(false),
+        }
+    }
+
     pub async fn remove_member(pool: &PgPool, group_id: &str, user: &str) -> Result<bool, AppError> {
         let r = sqlx::query("DELETE FROM group_members WHERE group_id=$1 AND user_name=$2")
             .bind(group_id)

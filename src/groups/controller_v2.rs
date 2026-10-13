@@ -8,9 +8,9 @@ use serde::Deserialize;
 use sqlx::PgPool;
 
 use crate::groups::models::{
-    AdminCategoryReq, CreateGroupV2Req, CreateTopicReq, GroupCategoryRow, GroupDetail,
+    AdminCategoryReq, CallSessions, CreateGroupV2Req, CreateTopicReq, GroupCategoryRow, GroupDetail,
     GroupMessageView, GroupPresence, GroupSessions, GroupUnreadResp, JoinRequestView, MarkReadReq,
-    MyGroupItem, RespondJoinReq, UpdateGroupV2Req,
+    MyGroupItem, RespondJoinReq, SetRoleReq, UpdateGroupV2Req,
 };
 use crate::groups::repository_v2::GroupV2Repo;
 use crate::groups::service_v2::GroupV2Service;
@@ -181,7 +181,7 @@ pub async fn group_members_v2(pool: Data<PgPool>, path: Path<String>, claim: Req
     }
 }
 
-// DELETE /group/{id}/members/{user} — owner only
+// DELETE /group/{id}/members/{user} — owner full rights; group admin may remove plain members
 #[delete("/{id}/members/{user}")]
 pub async fn remove_member_v2(pool: Data<PgPool>, path: Path<(String, String)>, claim: ReqData<Claims>) -> HttpResponse {
     let (id, user) = path.into_inner();
@@ -189,16 +189,95 @@ pub async fn remove_member_v2(pool: Data<PgPool>, path: Path<(String, String)>, 
         Ok(g) => g,
         Err(e) => return err_status(e, "Group not found"),
     };
-    if g.user_name != claim.user_name && claim.role != "ADMIN" {
-        return err_status(AppError::UnauthorizedError, "Owner only");
-    }
     if user == g.user_name {
         return err_status(AppError::BadRequestError("Cannot remove the owner".to_string()), "Cannot remove owner");
+    }
+    let is_owner = g.user_name == claim.user_name || claim.role == "ADMIN";
+    let my_role = GroupV2Repo::is_member(&pool, &id, &claim.user_name).await.unwrap_or(None).map(|m| m.role).unwrap_or_default();
+    let is_group_admin = is_owner || my_role == "admin" || my_role == "owner";
+    if !is_group_admin {
+        return err_status(AppError::UnauthorizedError, "Owner or admin only");
+    }
+    // group admins cannot remove the owner or fellow admins — owner only
+    if !is_owner {
+        let target_role = GroupV2Repo::is_member(&pool, &id, &user).await.unwrap_or(None).map(|m| m.role).unwrap_or_default();
+        if target_role == "owner" || target_role == "admin" {
+            return err_status(AppError::UnauthorizedError, "Only owner can remove admins");
+        }
     }
     match GroupV2Repo::remove_member(&pool, &id, &user).await {
         Ok(true) => ok(serde_json::json!({ "ok": true })),
         Ok(false) => err_status(AppError::NotFoundError("member".to_string(), user), "Not a member"),
         Err(e) => err_status(e, "Error removing member"),
+    }
+}
+
+// POST /group/{id}/roles {action: promote|demote, user_name} — group owner only
+#[post("/{id}/roles")]
+pub async fn set_role_v2(
+    pool: Data<PgPool>,
+    path: Path<String>,
+    body: web::Json<SetRoleReq>,
+    claim: ReqData<Claims>,
+) -> HttpResponse {
+    let id = path.into_inner();
+    match GroupV2Service::set_role(&pool, &claim, &id, &body.user_name, &body.action).await {
+        Ok(role) => ok(serde_json::json!({ "user_name": body.user_name, "role": role })),
+        Err(e) => err_status(e, "Error updating role"),
+    }
+}
+
+// GET /group/{id}/call — current call state (member only)
+#[get("/{id}/call")]
+pub async fn get_call_v2(
+    pool: Data<PgPool>,
+    calls: Data<CallSessions>,
+    path: Path<String>,
+    claim: ReqData<Claims>,
+) -> HttpResponse {
+    let id = path.into_inner();
+    if GroupV2Repo::is_member(&pool, &id, &claim.user_name).await.unwrap_or(None).is_none() {
+        // owner without member row (legacy) may still view
+        if let Ok(g) = GroupV2Repo::get_group(&pool, &id).await {
+            if g.user_name != claim.user_name {
+                return err_status(AppError::UnauthorizedError, "Join the group first");
+            }
+        }
+    }
+    ok(GroupV2Service::call_state(&pool, &calls, &id).await)
+}
+
+// POST /group/{id}/call/start — owner or group admin
+#[post("/{id}/call/start")]
+pub async fn start_call_v2(
+    pool: Data<PgPool>,
+    calls: Data<CallSessions>,
+    sessions: Data<GroupSessions>,
+    presence: Data<GroupPresence>,
+    path: Path<String>,
+    claim: ReqData<Claims>,
+) -> HttpResponse {
+    let id = path.into_inner();
+    match GroupV2Service::call_start(&pool, &calls, &sessions, &presence, &claim, &id).await {
+        Ok(state) => ok(state),
+        Err(e) => err_status(e, "Cannot start call"),
+    }
+}
+
+// POST /group/{id}/call/end — call admin or group admin/owner
+#[post("/{id}/call/end")]
+pub async fn end_call_v2(
+    pool: Data<PgPool>,
+    calls: Data<CallSessions>,
+    sessions: Data<GroupSessions>,
+    presence: Data<GroupPresence>,
+    path: Path<String>,
+    claim: ReqData<Claims>,
+) -> HttpResponse {
+    let id = path.into_inner();
+    match GroupV2Service::call_end(&pool, &calls, &sessions, &presence, &claim, &id).await {
+        Ok(_) => ok(serde_json::json!({ "ok": true })),
+        Err(e) => err_status(e, "Cannot end call"),
     }
 }
 
@@ -211,7 +290,7 @@ pub async fn join_group_v2(pool: Data<PgPool>, path: Path<String>, claim: ReqDat
     }
 }
 
-// GET /group/{id}/requests?status=pending — owner views join requests + profiles
+// GET /group/{id}/requests?status=pending — owner or group admin
 #[get("/{id}/requests")]
 pub async fn list_requests_v2(
     pool: Data<PgPool>,
@@ -224,8 +303,9 @@ pub async fn list_requests_v2(
         Ok(g) => g,
         Err(e) => return err_status(e, "Group not found"),
     };
-    if g.user_name != claim.user_name && claim.role != "ADMIN" {
-        return err_status(AppError::UnauthorizedError, "Owner only");
+    let _ = g;
+    if claim.role != "ADMIN" && !GroupV2Repo::is_group_admin(&pool, &id, &claim.user_name).await.unwrap_or(false) {
+        return err_status(AppError::UnauthorizedError, "Owner or admin only");
     }
     let status = query.get("status").map(|s| s.as_str()).unwrap_or("pending");
     match GroupV2Repo::list_requests(&pool, &id, status).await {
@@ -240,7 +320,7 @@ pub async fn list_requests_v2(
     }
 }
 
-// POST /group/{id}/requests/{req_id} {action: accept|reject} — owner
+// POST /group/{id}/requests/{req_id} {action: accept|reject} — owner or group admin
 #[post("/{id}/requests/{req_id}")]
 pub async fn respond_request_v2(
     pool: Data<PgPool>,
@@ -253,8 +333,9 @@ pub async fn respond_request_v2(
         Ok(g) => g,
         Err(e) => return err_status(e, "Group not found"),
     };
-    if g.user_name != claim.user_name && claim.role != "ADMIN" {
-        return err_status(AppError::UnauthorizedError, "Owner only");
+    let _ = g;
+    if claim.role != "ADMIN" && !GroupV2Repo::is_group_admin(&pool, &id, &claim.user_name).await.unwrap_or(false) {
+        return err_status(AppError::UnauthorizedError, "Owner or admin only");
     }
     let accept = match body.action.as_str() {
         "accept" => true,
@@ -267,7 +348,7 @@ pub async fn respond_request_v2(
     }
 }
 
-// POST /group/{id}/topics {title} — owner adds topic (one open at a time)
+// POST /group/{id}/topics {title} — owner or group admin (one open at a time)
 #[post("/{id}/topics")]
 pub async fn add_topic_v2(
     pool: Data<PgPool>,
@@ -280,8 +361,9 @@ pub async fn add_topic_v2(
         Ok(g) => g,
         Err(e) => return err_status(e, "Group not found"),
     };
-    if g.user_name != claim.user_name && claim.role != "ADMIN" {
-        return err_status(AppError::UnauthorizedError, "Owner only");
+    let _ = g;
+    if claim.role != "ADMIN" && !GroupV2Repo::is_group_admin(&pool, &id, &claim.user_name).await.unwrap_or(false) {
+        return err_status(AppError::UnauthorizedError, "Owner or admin only");
     }
     if body.title.trim().is_empty() {
         return err_status(AppError::BadRequestError("topic title required".to_string()), "Bad topic");
@@ -296,7 +378,7 @@ pub async fn add_topic_v2(
     }
 }
 
-// POST /group/{id}/topics/{tid}/close — owner
+// POST /group/{id}/topics/{tid}/close — owner or group admin
 #[post("/{id}/topics/{tid}/close")]
 pub async fn close_topic_v2(pool: Data<PgPool>, path: Path<(String, String)>, claim: ReqData<Claims>) -> HttpResponse {
     let (id, tid) = path.into_inner();
@@ -304,8 +386,9 @@ pub async fn close_topic_v2(pool: Data<PgPool>, path: Path<(String, String)>, cl
         Ok(g) => g,
         Err(e) => return err_status(e, "Group not found"),
     };
-    if g.user_name != claim.user_name && claim.role != "ADMIN" {
-        return err_status(AppError::UnauthorizedError, "Owner only");
+    let _ = g;
+    if claim.role != "ADMIN" && !GroupV2Repo::is_group_admin(&pool, &id, &claim.user_name).await.unwrap_or(false) {
+        return err_status(AppError::UnauthorizedError, "Owner or admin only");
     }
     match GroupV2Repo::close_topic(&pool, &id, &tid).await {
         Ok(_) => ok(serde_json::json!({ "ok": true })),
@@ -479,6 +562,7 @@ pub async fn ws_group_v2_connect(
     stream: web::Payload,
     sessions: web::Data<GroupSessions>,
     presence: web::Data<GroupPresence>,
+    calls: web::Data<CallSessions>,
     query: web::Query<GroupWsParams>,
     pool: Data<PgPool>,
 ) -> Result<HttpResponse, Error> {
@@ -487,7 +571,7 @@ pub async fn ws_group_v2_connect(
     let (response, session, msg_stream) = handle(&req, stream)?;
     let user = claims.user_name.clone();
     actix_web::rt::spawn(async move {
-        let _ = GroupV2Service::group_ws_v2(session, msg_stream, user, sessions, presence, &pool).await;
+        let _ = GroupV2Service::group_ws_v2(session, msg_stream, user, sessions, presence, calls, &pool).await;
     });
     Ok(response)
 }

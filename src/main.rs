@@ -28,7 +28,7 @@ mod wallet;
 
 use crate::chat::service::UserConnections;
 use crate::chat::service::ChatSessions;
-use crate::groups::models::{GroupPresence, GroupSessions};
+use crate::groups::models::{CallSessions, GroupPresence, GroupSessions};
 use crate::shared::config::CONFIG;
 
 #[get("/hello")]
@@ -72,6 +72,7 @@ async fn main() -> std::io::Result<()> {
     let chat_sessions: ChatSessions = Arc::new(Mutex::new(HashMap::new()));
     let group_sessions: GroupSessions = Arc::new(DashMap::new());
     let group_presence: GroupPresence = Arc::new(DashMap::new());
+    let group_calls: CallSessions = Arc::new(DashMap::new());
     //let pool = init_db_pool();
     let pool = init_db_pool_x().await;
 
@@ -102,7 +103,8 @@ async fn main() -> std::io::Result<()> {
                 .app_data(web::Data::new(chat_sessions.clone()))
                 .app_data(web::Data::new(group_sessions.clone()))
                 .app_data(web::Data::new(group_presence.clone()))
-                
+                .app_data(web::Data::new(group_calls.clone()))
+
                 .configure(configure_services)
         })
             .bind(address)?
@@ -128,6 +130,7 @@ async fn main() -> std::io::Result<()> {
                 .app_data(web::Data::new(chat_sessions.clone()))
                 .app_data(web::Data::new(group_sessions.clone()))
                 .app_data(web::Data::new(group_presence.clone()))
+                .app_data(web::Data::new(group_calls.clone()))
                 .configure(configure_services)
         })
             .bind(address)?
@@ -223,6 +226,10 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(groups::controller_v2::close_topic_v2)
                         .service(groups::controller_v2::group_messages_v2)
                         .service(groups::controller_v2::mark_read_v2)
+                        .service(groups::controller_v2::set_role_v2)
+                        .service(groups::controller_v2::get_call_v2)
+                        .service(groups::controller_v2::start_call_v2)
+                        .service(groups::controller_v2::end_call_v2)
                         .service(groups::controller_v2::admin_list_groups_v2)
                         .service(groups::controller_v2::admin_get_group_v2)
                         .service(groups::controller_v2::admin_add_category_v2)
