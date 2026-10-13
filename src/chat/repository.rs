@@ -141,10 +141,10 @@ impl ChatPairRepo {
             "
              SELECT cp.id, cp.user1, cp.user2, cp.last_message, cp.all_read, cp.created_at,
                cp.updated_at, p1.image AS user1_image, p2.image AS user2_image
-             FROM chat_pairs cp
-             JOIN profiles p1 ON p1.user_name = cp.user1
-             JOIN profiles p2 ON p2.user_name = cp.user2
-             WHERE (user1 = $1 AND user2 = $2) OR (user1 = $2 AND user2 = $1)
+              FROM chat_pairs cp
+              LEFT JOIN profiles p1 ON p1.user_name = cp.user1
+              LEFT JOIN profiles p2 ON p2.user_name = cp.user2
+              WHERE (user1 = $1 AND user2 = $2) OR (user1 = $2 AND user2 = $1)
              ",
             xuser1,
             xuser2
@@ -175,8 +175,8 @@ impl ChatPairRepo {
                cp.id, cp.user1, cp.user2, cp.last_message, cp.all_read, cp.created_at,
                cp.updated_at, p1.image AS user1_image, p2.image AS user2_image
             FROM chat_pairs cp
-            JOIN profiles p1 ON p1.user_name = cp.user1
-            JOIN profiles p2 ON p2.user_name = cp.user2
+            LEFT JOIN profiles p1 ON p1.user_name = cp.user1
+            LEFT JOIN profiles p2 ON p2.user_name = cp.user2
             WHERE user1 = $1 OR user2 =$1
             ",
             user_name
