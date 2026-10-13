@@ -19,6 +19,7 @@ mod membership;
 mod middlewares;
 mod orders;
 mod profile;
+mod search_tags;
 mod shared;
 mod system;
 mod trivia;
@@ -178,6 +179,20 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(profile::controller::activate_earnings)
                         .service(profile::controller::cashout_earnings)
                         .service(profile::controller::post_earnings)
+                        .service(search_tags::controller::get_my_tags)
+                        .service(search_tags::controller::set_my_tags)
+                )
+                .service(
+                    web::scope("search")
+                        .service(search_tags::controller::list_tags)
+                        .service(search_tags::controller::search_friends)
+                )
+                .service(
+                    web::scope("admin/search")
+                        .service(search_tags::controller::admin_list_tags)
+                        .service(search_tags::controller::admin_create_tag)
+                        .service(search_tags::controller::admin_update_tag)
+                        .service(search_tags::controller::admin_delete_tag)
                 )
                 .service(
                     web::scope("user")
