@@ -67,18 +67,25 @@ pub async fn send_app_notification(payload: FcmMessage) -> Result<(), Box<dyn Er
     if app_env == "prod" {
         fcm_url =  "https://fcm.googleapis.com/v1/projects/vhennus-916a0/messages:send"
     }
-    let response = client
+    let mut response = client
         .post(fcm_url)
         .insert_header(("Authorization", format!("Bearer {}", access_token))) // Correct way to add Bearer token
         .insert_header(("Content-Type", "application/json")) // Required for FCM
         .send_body(serialized_payload) // Send the serialized struct as JSON
         .await?;
-    if response.status().is_success() {
+    let status = response.status();
+    if status.is_success() {
         log::debug!("fcm api response successful");
         Ok(())
     } else {
-        log::error!("error sending notification: {}", response.status());
-        Err(Box::from("FAILED"))
+        let body = response.body().await.unwrap_or_default();
+        let body_text = String::from_utf8_lossy(&body);
+        log::error!(
+            "error sending notification: status {} body {}",
+            status,
+            body_text
+        );
+        Err(format!("FCM send failed: status {} body {}", status, body_text).into())
     }
 }
 

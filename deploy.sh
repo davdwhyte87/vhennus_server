@@ -53,6 +53,27 @@ fi
 echo "Environment loaded successfully."
 
 # --------------------------------------------------
+# Check push credentials (Firebase service account)
+# --------------------------------------------------
+
+# The server sends push notifications via FCM using service-account.json
+# in the build/ working directory (see shared/app_notify.rs). It is
+# gitignored on purpose — copy it to the server once manually:
+#   scp service-account.json root@<server>:$BUILD_DIR/service-account.json
+# It must belong to the Firebase project matching APP_ENV
+# (local/test -> vhennus-dev, prod -> vhennus-916a0).
+
+if [ ! -f "$BUILD_DIR/service-account.json" ]; then
+    echo "ERROR: Push credentials not found:"
+    echo "$BUILD_DIR/service-account.json"
+    echo "Push notifications (and broadcasts) will fail without it."
+    echo "Copy your Firebase service account key there, then re-run."
+    exit 1
+fi
+
+echo "Push credentials present."
+
+# --------------------------------------------------
 # Load Rust environment if necessary
 # --------------------------------------------------
 

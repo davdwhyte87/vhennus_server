@@ -7,7 +7,7 @@ use actix_web_validator::Json;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
-use crate::notifications::models::{BroadcastReq, BroadcastResp, MarkReadReq, NotificationItem, RegisterTokenReq, UnreadCountResp};
+use crate::notifications::models::{BroadcastReq, BroadcastResp, MarkReadReq, NotificationItem, PushStatusResp, RegisterTokenReq, UnreadCountResp};
 use crate::notifications::service::NotificationService;
 use crate::shared::auth::Claims;
 use crate::shared::response::GenericResp;
@@ -155,6 +155,43 @@ pub async fn register_token(
         Err(err) => {
             log::error!("error saving push token {}", err);
             resp.message = "Error saving token".to_string();
+            resp.server_message = Some(err.to_string());
+            HttpResponse::BadRequest().json(resp)
+        }
+    }
+}
+
+/// Admin visibility into push reach (no per-user data exposed).
+#[get("/status")]
+pub async fn admin_push_status(
+    pool: Data<PgPool>,
+    claim: Option<ReqData<Claims>>,
+) -> HttpResponse {
+    let mut resp = GenericResp::<PushStatusResp> {
+        message: "".to_string(),
+        server_message: None,
+        data: None,
+    };
+    let claim = match claim {
+        Some(c) => c,
+        None => {
+            resp.message = "Unauthorized".to_string();
+            return HttpResponse::Unauthorized().json(resp);
+        }
+    };
+    if claim.role != "ADMIN" {
+        resp.message = "Admin only".to_string();
+        return HttpResponse::Forbidden().json(resp);
+    }
+    match NotificationService::push_status(&pool).await {
+        Ok(status) => {
+            resp.message = "".to_string();
+            resp.data = Some(status);
+            HttpResponse::Ok().json(resp)
+        }
+        Err(err) => {
+            log::error!("error getting push status {}", err);
+            resp.message = "Error getting push status".to_string();
             resp.server_message = Some(err.to_string());
             HttpResponse::BadRequest().json(resp)
         }

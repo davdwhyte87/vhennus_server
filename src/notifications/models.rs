@@ -46,3 +46,9 @@ pub struct BroadcastResp {
     pub users_notified: i64,
     pub pushes_sent: i64,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct PushStatusResp {
+    pub total_users: i64,
+    pub users_with_tokens: i64,
+}

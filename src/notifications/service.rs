@@ -3,7 +3,7 @@ use std::error::Error;
 
 use sqlx::PgPool;
 
-use crate::notifications::models::{BroadcastResp, NotificationItem, UnreadCountResp};
+use crate::notifications::models::{BroadcastResp, NotificationItem, PushStatusResp, UnreadCountResp};
 use crate::notifications::repository::NotificationRepo;
 use crate::profile::service::ProfileService;
 use crate::shared::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
@@ -45,6 +45,16 @@ impl NotificationService {
         profile.app_f_token = Some(token.to_owned());
         ProfileService::update_profile(pool, profile).await?;
         Ok(())
+    }
+
+    /// Admin visibility: how many users exist vs. how many devices can
+    /// actually receive a push right now.
+    pub async fn push_status(pool: &PgPool) -> Result<PushStatusResp, Box<dyn Error>> {
+        let (total_users, users_with_tokens) = NotificationRepo::push_reach(pool).await?;
+        Ok(PushStatusResp {
+            total_users,
+            users_with_tokens,
+        })
     }
 
     /// Admin mass notification: one inbox row per user plus best-effort

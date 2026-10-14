@@ -64,8 +64,23 @@ impl NotificationRepo {
         Ok(row.count.unwrap_or(0))
     }
 
-    pub async fn mark_read(
-        pool: &PgPool,
+    pub async fn push_reach(pool: &PgPool) -> Result<(i64, i64), Box<dyn Error>> {
+        #[derive(sqlx::FromRow)]
+        struct Count {
+            count: Option<i64>,
+        }
+        let total: Count = sqlx::query_as::<_, Count>("SELECT COUNT(*) AS count FROM profiles")
+            .fetch_one(pool)
+            .await?;
+        let with_tokens: Count = sqlx::query_as::<_, Count>(
+            "SELECT COUNT(*) AS count FROM profiles WHERE app_f_token IS NOT NULL AND app_f_token <> ''",
+        )
+        .fetch_one(pool)
+        .await?;
+        Ok((total.count.unwrap_or(0), with_tokens.count.unwrap_or(0)))
+    }
+
+    pub async fn mark_read(        pool: &PgPool,
         user_name: &str,
         ids: Option<&[String]>,
     ) -> Result<(), Box<dyn Error>> {
