@@ -17,6 +17,7 @@ mod groups;
 mod jobs;
 mod membership;
 mod middlewares;
+mod notifications;
 mod orders;
 mod profile;
 mod search_tags;
@@ -168,6 +169,8 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(feed::controller::get_my_posts)
                         .service(feed::controller::get_single_posts)
                         .service(feed::controller::like_post)
+                        .service(feed::controller::get_poll)
+                        .service(feed::controller::vote_poll)
                         .service(feed::controller::get_users_posts),
                 )
                 .service(
@@ -234,6 +237,17 @@ fn configure_services(cfg: &mut ServiceConfig) {
                         .service(groups::controller_v2::admin_get_group_v2)
                         .service(groups::controller_v2::admin_add_category_v2)
                         .service(groups::controller_v2::admin_delete_category_v2)
+                )
+                .service(
+                    web::scope("notification")
+                        .service(notifications::controller::list_notifications)
+                        .service(notifications::controller::unread_count)
+                        .service(notifications::controller::mark_read)
+                        .service(notifications::controller::register_token),
+                )
+                .service(
+                    web::scope("admin/notifications")
+                        .service(notifications::controller::admin_broadcast),
                 )
                 .service(
                     web::scope("membership")

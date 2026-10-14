@@ -12,6 +12,7 @@ use validator::Validate;
 
 use crate::profile::models::Profile;
 use crate::profile::service::ProfileService;
+use crate::notifications::service::NotificationService;
 use crate::shared::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
 use crate::shared::auth::{Claims, encode_token};
 use crate::shared::error::ServiceError;
@@ -1209,6 +1210,24 @@ pub async fn send_friend_request(
         });
     }
 
+    // Stored inbox copy (best-effort).
+    {
+        let pool_clone = pool.get_ref().clone();
+        let recipient = req.user_name.clone();
+        let actor = friend_request.requester.clone();
+        actix_web::rt::spawn(async move {
+            NotificationService::push(
+                &pool_clone,
+                &recipient,
+                "friend_request",
+                "New friend request",
+                &format!("@{} just sent you a friend request", actor),
+                Some("/my_friend_requests"),
+            )
+            .await;
+        });
+    }
+
     respData.message = "Ok".to_string();
     respData.server_message = None;
     respData.data = Some(friend_request);
@@ -1259,7 +1278,7 @@ pub async fn accept_friend_request(
     
     
     // get user profile
-    let profile = match ProfileService::get_profile(&pool, fr.requester).await{
+    let profile = match ProfileService::get_profile(&pool, fr.requester.clone()).await{
         Ok(profile)=>{profile},
         Err(err)=>{
             log::error!("error getting profile {}", err.to_string());
@@ -1281,6 +1300,24 @@ pub async fn accept_friend_request(
         };
         actix_web::rt::spawn(async move {
             send_app_notification(payload).await;
+        });
+    }
+
+    // Stored inbox copy (best-effort).
+    {
+        let pool_clone = pool.get_ref().clone();
+        let recipient = fr.requester.clone();
+        let actor = fr.user_name.clone();
+        actix_web::rt::spawn(async move {
+            NotificationService::push(
+                &pool_clone,
+                &recipient,
+                "friend_accepted",
+                "Friend request accepted",
+                &format!("@{} accepted your friend request!", actor),
+                Some("/my_friends"),
+            )
+            .await;
         });
     }
 
