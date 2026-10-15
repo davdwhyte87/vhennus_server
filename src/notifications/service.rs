@@ -3,7 +3,7 @@ use std::error::Error;
 
 use sqlx::PgPool;
 
-use crate::notifications::models::{BroadcastResp, NotificationItem, PushStatusResp, UnreadCountResp};
+use crate::notifications::models::{BroadcastResp, NotificationItem, PushStatusResp, TestPushResp, UnreadCountResp};
 use crate::notifications::repository::NotificationRepo;
 use crate::profile::service::ProfileService;
 use crate::shared::app_notify::{send_app_notification, FcmMessage, MessagePayload, Notification};
@@ -37,7 +37,8 @@ impl NotificationService {
         NotificationRepo::mark_read(pool, user_name, ids).await
     }
 
-    pub async fn save_token(        pool: &PgPool,
+    pub async fn save_token(
+        pool: &PgPool,
         user_name: &str,
         token: &str,
     ) -> Result<(), Box<dyn Error>> {
@@ -123,6 +124,64 @@ impl NotificationService {
         Ok(BroadcastResp {
             users_notified,
             pushes_sent,
+        })
+    }
+
+    /// Admin debugging: send one notification to a single user and report
+    /// exactly how far it got (stored? token? FCM accepted?).
+    pub async fn test_push(
+        pool: &PgPool,
+        user_name: &str,
+        title: &str,
+        body: &str,
+    ) -> Result<TestPushResp, Box<dyn Error>> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let stored = NotificationRepo::insert(
+            pool,
+            &id,
+            user_name,
+            "broadcast",
+            title,
+            body,
+            Some("/home/notifications"),
+        )
+        .await
+        .is_ok();
+
+        let token: Option<String> =
+            match ProfileService::get_profile(pool, user_name.to_owned()).await {
+                Ok(p) => p.app_f_token.filter(|t| !t.trim().is_empty()),
+                Err(err) => {
+                    log::error!("error getting profile for test push {}", err);
+                    None
+                }
+            };
+
+        let mut push_sent = false;
+        if let Some(token) = token.clone() {
+            let mut data = HashMap::new();
+            data.insert("kind".to_string(), "test".to_string());
+            data.insert("link".to_string(), "/home/notifications".to_string());
+            let payload = FcmMessage {
+                message: MessagePayload {
+                    token,
+                    notification: Notification {
+                        title: title.to_string(),
+                        body: body.to_string(),
+                    },
+                    data: Some(data),
+                },
+            };
+            match send_app_notification(payload).await {
+                Ok(_) => push_sent = true,
+                Err(err) => log::error!("test push FCM error {}", err),
+            }
+        }
+
+        Ok(TestPushResp {
+            stored,
+            has_token: token.is_some(),
+            push_sent,
         })
     }
 

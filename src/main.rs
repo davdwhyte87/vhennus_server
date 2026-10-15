@@ -248,7 +248,8 @@ fn configure_services(cfg: &mut ServiceConfig) {
                 .service(
                     web::scope("admin/notifications")
                         .service(notifications::controller::admin_broadcast)
-                        .service(notifications::controller::admin_push_status),
+                        .service(notifications::controller::admin_push_status)
+                        .service(notifications::controller::admin_test_push),
                 )
                 .service(
                     web::scope("membership")

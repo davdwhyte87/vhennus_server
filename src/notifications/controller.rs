@@ -7,7 +7,7 @@ use actix_web_validator::Json;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
-use crate::notifications::models::{BroadcastReq, BroadcastResp, MarkReadReq, NotificationItem, PushStatusResp, RegisterTokenReq, UnreadCountResp};
+use crate::notifications::models::{BroadcastReq, BroadcastResp, MarkReadReq, NotificationItem, PushStatusResp, RegisterTokenReq, TestPushReq, TestPushResp, UnreadCountResp};
 use crate::notifications::service::NotificationService;
 use crate::shared::auth::Claims;
 use crate::shared::response::GenericResp;
@@ -192,6 +192,59 @@ pub async fn admin_push_status(
         Err(err) => {
             log::error!("error getting push status {}", err);
             resp.message = "Error getting push status".to_string();
+            resp.server_message = Some(err.to_string());
+            HttpResponse::BadRequest().json(resp)
+        }
+    }
+}
+
+/// Admin debugging: push one notification to a single user.
+#[post("/test")]
+pub async fn admin_test_push(
+    pool: Data<PgPool>,
+    req: Json<TestPushReq>,
+    claim: Option<ReqData<Claims>>,
+) -> HttpResponse {
+    let mut resp = GenericResp::<TestPushResp> {
+        message: "".to_string(),
+        server_message: None,
+        data: None,
+    };
+    let claim = match claim {
+        Some(c) => c,
+        None => {
+            resp.message = "Unauthorized".to_string();
+            return HttpResponse::Unauthorized().json(resp);
+        }
+    };
+    if claim.role != "ADMIN" {
+        resp.message = "Admin only".to_string();
+        return HttpResponse::Forbidden().json(resp);
+    }
+    if req.user_name.trim().is_empty() {
+        resp.message = "user_name is required".to_string();
+        return HttpResponse::BadRequest().json(resp);
+    }
+    let title = req.title.clone().unwrap_or("Test notification".to_string());
+    let body = req
+        .body
+        .clone()
+        .unwrap_or("If you see this, push works.".to_string());
+    match NotificationService::test_push(&pool, req.user_name.trim(), &title, &body).await {
+        Ok(result) => {
+            resp.message = if result.push_sent {
+                "FCM accepted the push — check the device.".to_string()
+            } else if !result.has_token {
+                "No push token for that user — enable push on their device first.".to_string()
+            } else {
+                "Stored, but FCM rejected the push — check server logs.".to_string()
+            };
+            resp.data = Some(result);
+            HttpResponse::Ok().json(resp)
+        }
+        Err(err) => {
+            log::error!("error sending test push {}", err);
+            resp.message = "Error sending test push".to_string();
             resp.server_message = Some(err.to_string());
             HttpResponse::BadRequest().json(resp)
         }

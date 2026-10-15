@@ -52,3 +52,17 @@ pub struct PushStatusResp {
     pub total_users: i64,
     pub users_with_tokens: i64,
 }
+
+#[derive(Debug, Serialize, Deserialize, Validate)]
+pub struct TestPushReq {
+    pub user_name: String,
+    pub title: Option<String>,
+    pub body: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct TestPushResp {
+    pub stored: bool,
+    pub has_token: bool,
+    pub push_sent: bool,
+}
