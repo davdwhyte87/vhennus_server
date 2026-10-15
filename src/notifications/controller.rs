@@ -4,8 +4,11 @@ use actix_web::{
     HttpResponse,
 };
 use actix_web_validator::Json;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::sync::atomic::{AtomicBool, Ordering};
+use validator::Validate;
 
 use crate::notifications::models::{BroadcastReq, BroadcastResp, MarkReadReq, NotificationItem, PushStatusResp, RegisterTokenReq, TestPushReq, TestPushResp, UnreadCountResp};
 use crate::notifications::service::NotificationService;
@@ -204,8 +207,7 @@ pub async fn admin_test_push(
     pool: Data<PgPool>,
     req: Json<TestPushReq>,
     claim: Option<ReqData<Claims>>,
-) -> HttpResponse {
-    let mut resp = GenericResp::<TestPushResp> {
+) -> HttpResponse {    let mut resp = GenericResp::<TestPushResp> {
         message: "".to_string(),
         server_message: None,
         data: None,
@@ -291,4 +293,81 @@ pub async fn admin_broadcast(
             HttpResponse::BadRequest().json(resp)
         }
     }
+}
+
+static HEARTBEAT_RUNNING: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
+
+#[derive(Debug, Deserialize, Validate)]
+struct HeartbeatReq {
+    user_name: String,
+    count: Option<i64>,
+}
+
+/// Admin debugging: send a test push to one user every 60s (max 10).
+/// The worker cannot wake itself with the app closed — the server drives
+/// the cadence. Returns immediately; watch the device, not the response.
+#[post("/heartbeat")]
+pub async fn admin_heartbeat(
+    pool: Data<PgPool>,
+    req: Json<HeartbeatReq>,
+    claim: Option<ReqData<Claims>>,
+) -> HttpResponse {
+    let mut resp = GenericResp::<String> {
+        message: "".to_string(),
+        server_message: None,
+        data: None,
+    };
+    let claim = match claim {
+        Some(c) => c,
+        None => {
+            resp.message = "Unauthorized".to_string();
+            return HttpResponse::Unauthorized().json(resp);
+        }
+    };
+    if claim.role != "ADMIN" {
+        resp.message = "Admin only".to_string();
+        return HttpResponse::Forbidden().json(resp);
+    }
+    if req.user_name.trim().is_empty() {
+        resp.message = "user_name is required".to_string();
+        return HttpResponse::BadRequest().json(resp);
+    }
+    let count = req.count.unwrap_or(10).clamp(1, 10);
+    if HEARTBEAT_RUNNING.swap(true, Ordering::SeqCst) {
+        resp.message = "A heartbeat is already running — wait for it to finish.".to_string();
+        return HttpResponse::BadRequest().json(resp);
+    }
+    let pool_clone = pool.get_ref().clone();
+    let user_name = req.user_name.trim().to_string();
+    let user_label = user_name.clone();
+    actix_web::rt::spawn(async move {
+        for i in 1..=count {
+            if i > 1 {
+                tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            }
+            let title = "Heartbeat test".to_string();
+            let body = format!(
+                "Ping {} of {} — background push works if you see this with the app closed.",
+                i, count
+            );
+            match NotificationService::test_push(&pool_clone, &user_name, &title, &body).await {
+                Ok(r) => log::debug!(
+                    "heartbeat {}/{} to {}: stored={} token={} sent={}",
+                    i,
+                    count,
+                    user_name,
+                    r.stored,
+                    r.has_token,
+                    r.push_sent
+                ),
+                Err(err) => log::error!("heartbeat {}/{} error {}", i, count, err),
+            }
+        }
+        HEARTBEAT_RUNNING.store(false, Ordering::SeqCst);
+    });
+    resp.message = format!(
+        "Heartbeat started: {} pings, one per minute, to {}. Close the app and watch.",
+        count, user_label
+    );
+    HttpResponse::Ok().json(resp)
 }
