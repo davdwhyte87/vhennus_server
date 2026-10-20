@@ -12,7 +12,31 @@ use serde_json::{json, Value};
 
 
 
-const FCM_URL: &str = "https://fcm.googleapis.com/v1/projects/vhennus-dev/messages:send";
+/// Firebase project that owns the registration tokens. Override with
+/// FCM_PROJECT_ID in .env — it MUST match the VITE_FIREBASE_PROJECT_ID
+/// the web app was built with, otherwise FCM rejects every token.
+/// Defaults preserve the old behaviour (dev project, prod project).
+fn fcm_project_id() -> String {
+    if let Ok(project) = env::var("FCM_PROJECT_ID") {
+        let project = project.trim().to_owned();
+        if !project.is_empty() {
+            return project;
+        }
+    }
+    let app_env = env::var("APP_ENV").unwrap_or_else(|_| "local".to_owned());
+    if app_env == "prod" {
+        "vhennus-916a0".to_owned()
+    } else {
+        "vhennus-dev".to_owned()
+    }
+}
+
+fn fcm_send_url() -> String {
+    format!(
+        "https://fcm.googleapis.com/v1/projects/{}/messages:send",
+        fcm_project_id()
+    )
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct FcmMessage {
@@ -56,19 +80,10 @@ pub async fn send_app_notification(payload: FcmMessage) -> Result<(), Box<dyn Er
 
     let serialized_payload = serde_json::to_string(&payload)?;
     let client = Client::default();
-    let mut fcm_url = FCM_URL;
-    let app_env = match env::var("APP_ENV"){
-        Ok(data)=>{data},
-        Err(err)=>{
-            "local".to_owned()
-        }
-    };
-
-    if app_env == "prod" {
-        fcm_url =  "https://fcm.googleapis.com/v1/projects/vhennus-916a0/messages:send"
-    }
+    let fcm_url = fcm_send_url();
+    log::info!("sending fcm push to project {} (token {}…)", fcm_project_id(), &payload.message.token[..payload.message.token.len().min(24)]);
     let mut response = client
-        .post(fcm_url)
+        .post(&fcm_url)
         .insert_header(("Authorization", format!("Bearer {}", access_token))) // Correct way to add Bearer token
         .insert_header(("Content-Type", "application/json")) // Required for FCM
         .send_body(serialized_payload) // Send the serialized struct as JSON
@@ -102,7 +117,21 @@ struct FirebaseCredentials {
 
 
 async fn get_fcm_access_token() -> Result<String, Box<dyn std::error::Error>> {
-    let credentials_path = PathBuf::from("service-account.json");
+    // Absolute path preferred: the binary's CWD varies by deployment
+    // (Docker WORKDIR, systemd, deploy.sh build dir), and a relative
+    // miss means every push fails with "file not found".
+    let credentials_path = match env::var("FCM_SERVICE_ACCOUNT") {
+        Ok(p) if !p.trim().is_empty() => PathBuf::from(p.trim()),
+        _ => PathBuf::from("service-account.json"),
+    };
+    if !credentials_path.exists() {
+        return Err(format!(
+            "service account file not found at {:?} (set FCM_SERVICE_ACCOUNT or place service-account.json in the working dir {:?})",
+            credentials_path,
+            std::env::current_dir().unwrap_or_default()
+        )
+        .into());
+    }
     let service_account = CustomServiceAccount::from_file(credentials_path)?;
     let scopes = &["https://www.googleapis.com/auth/firebase.messaging"];
     let token = service_account.token(scopes).await?;
